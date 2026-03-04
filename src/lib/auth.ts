@@ -2,6 +2,7 @@ import type { NextAuthConfig } from "next-auth";
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { Role } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 
 import { getAuthTrustHost } from "@/lib/app-config";
 import { db } from "@/lib/db";
@@ -43,17 +44,25 @@ export const authConfig: NextAuthConfig = {
   },
   callbacks: {
     async signIn({ user, account }) {
-      if (account?.provider !== "google" || !user.email || !account.providerAccountId) {
+      if (account?.provider !== "google") {
         return false;
       }
 
-      const existingUser = await db.user.findUnique({ where: { email: user.email } });
+      const googleSub = account.providerAccountId ?? `google-fallback:${randomUUID()}`;
+      const normalizedEmail =
+        user.email?.toLowerCase() ?? `${googleSub.replace(/[^a-z0-9]/gi, "").slice(0, 40) || "user"}@no-email.local`;
+      const existingUser =
+        (await db.user.findUnique({ where: { email: normalizedEmail } })) ??
+        (await db.user.findUnique({ where: { googleSub } }));
 
       if (existingUser) {
-        if (existingUser.googleSub !== account.providerAccountId) {
+        if (existingUser.googleSub !== googleSub || existingUser.email !== normalizedEmail) {
           await db.user.update({
             where: { id: existingUser.id },
-            data: { googleSub: account.providerAccountId }
+            data: {
+              googleSub,
+              email: normalizedEmail
+            }
           });
         }
 
@@ -83,8 +92,8 @@ export const authConfig: NextAuthConfig = {
 
       const dbUser = await db.user.create({
         data: {
-          email: user.email,
-          googleSub: account.providerAccountId,
+          email: normalizedEmail,
+          googleSub,
           name: user.name,
           avatarUrl: user.image
         }
