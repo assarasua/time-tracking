@@ -4,7 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 const requiredAuthEnv = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "AUTH_SECRET", "APP_BASE_URL"] as const;
 
 function getMissingAuthEnv() {
-  return requiredAuthEnv.filter((key) => !process.env[key]);
+  return requiredAuthEnv.filter((key) => {
+    const value = process.env[key];
+    return !value || value.trim().length === 0;
+  });
 }
 
 type AuthRouteContext = { params: Promise<{ nextauth: string[] }> };
@@ -16,6 +19,37 @@ function getRequestBaseUrl(request: NextRequest) {
   return `${proto}://${host}`;
 }
 
+function getDiagnosticContext(request: NextRequest) {
+  const envStatus = Object.fromEntries(
+    requiredAuthEnv.map((key) => {
+      const value = process.env[key];
+      return [
+        key,
+        {
+          present: Boolean(value),
+          length: value?.length ?? 0
+        }
+      ];
+    })
+  );
+
+  return {
+    envStatus,
+    request: {
+      path: request.nextUrl.pathname,
+      host: request.headers.get("host"),
+      forwardedHost: request.headers.get("x-forwarded-host"),
+      forwardedProto: request.headers.get("x-forwarded-proto")
+    },
+    runtime: {
+      nodeEnv: process.env.NODE_ENV ?? null,
+      railwayEnv: process.env.RAILWAY_ENVIRONMENT_NAME ?? null,
+      railwayService: process.env.RAILWAY_SERVICE_NAME ?? null,
+      vercelEnv: process.env.VERCEL_ENV ?? null
+    }
+  };
+}
+
 function validateAuthRequest(request: NextRequest) {
   const missing = getMissingAuthEnv();
   if (missing.length > 0) {
@@ -23,7 +57,8 @@ function validateAuthRequest(request: NextRequest) {
       ok: false,
       code: "missing_env",
       error: "Auth configuration is incomplete.",
-      missing
+      missing,
+      diagnostics: getDiagnosticContext(request)
     }, { status: 500 });
   }
 
@@ -34,7 +69,8 @@ function validateAuthRequest(request: NextRequest) {
       return NextResponse.json({
         ok: false,
         code: "missing_host_header",
-        error: "Cannot determine request host headers for auth callback validation."
+        error: "Cannot determine request host headers for auth callback validation.",
+        diagnostics: getDiagnosticContext(request)
       }, { status: 500 });
     }
 
@@ -45,14 +81,16 @@ function validateAuthRequest(request: NextRequest) {
         code: "host_mismatch",
         error: "APP_BASE_URL host does not match incoming request host.",
         expectedHost: expected.host,
-        actualHost: actual.host
+        actualHost: actual.host,
+        diagnostics: getDiagnosticContext(request)
       }, { status: 500 });
     }
   } catch {
     return NextResponse.json({
       ok: false,
       code: "invalid_app_base_url",
-      error: "APP_BASE_URL is not a valid URL."
+      error: "APP_BASE_URL is not a valid URL.",
+      diagnostics: getDiagnosticContext(request)
     }, { status: 500 });
   }
 
@@ -75,7 +113,8 @@ function handleAuthException(error: unknown, request: NextRequest) {
     ok: false,
     code: "handler_exception",
     error: "Auth handler failed. Check server logs for stack trace.",
-    details
+    details,
+    diagnostics: getDiagnosticContext(request)
   }, { status: 500 });
 }
 
