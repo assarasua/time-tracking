@@ -49,7 +49,10 @@ export const authConfig: NextAuthConfig = {
 
       if (existingUser) {
         if (existingUser.googleSub !== account.providerAccountId) {
-          return false;
+          await db.user.update({
+            where: { id: existingUser.id },
+            data: { googleSub: account.providerAccountId }
+          });
         }
 
         const membership = await db.organizationUser.findFirst({
