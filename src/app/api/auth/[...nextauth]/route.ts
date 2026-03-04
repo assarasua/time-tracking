@@ -1,6 +1,7 @@
 import { handlers } from "@/lib/auth";
 import { getAppBaseUrl } from "@/lib/app-config";
 import { NextRequest, NextResponse } from "next/server";
+import { cleanEnv } from "@/lib/env-utils";
 
 const requiredAuthEnv = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "AUTH_SECRET"] as const;
 
@@ -122,7 +123,7 @@ function handleAuthException(error: unknown, request: NextRequest) {
   }, { status: 500 });
 }
 
-function maybeReturnConfigurationDiagnostics(request: NextRequest, response: Response) {
+async function maybeReturnConfigurationDiagnostics(request: NextRequest, response: Response) {
   const location = response.headers.get("location");
   if (!location || !location.includes("error=Configuration")) {
     return null;
@@ -130,6 +131,26 @@ function maybeReturnConfigurationDiagnostics(request: NextRequest, response: Res
 
   if (!request.nextUrl.pathname.includes("/api/auth/signin/google")) {
     return null;
+  }
+
+  const clientId = cleanEnv(process.env.GOOGLE_CLIENT_ID);
+  const clientSecret = cleanEnv(process.env.GOOGLE_CLIENT_SECRET);
+  const formatChecks = {
+    clientIdLooksValid: clientId.endsWith(".apps.googleusercontent.com"),
+    clientSecretLooksValid: clientSecret.startsWith("GOCSPX-")
+  };
+
+  let googleOidcReachable = false;
+  let googleOidcStatus: number | null = null;
+  try {
+    const discovery = await fetch("https://accounts.google.com/.well-known/openid-configuration", {
+      method: "GET",
+      cache: "no-store"
+    });
+    googleOidcReachable = discovery.ok;
+    googleOidcStatus = discovery.status;
+  } catch {
+    googleOidcReachable = false;
   }
 
   return NextResponse.json({
@@ -141,6 +162,11 @@ function maybeReturnConfigurationDiagnostics(request: NextRequest, response: Res
       "Ensure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET have no leading/trailing spaces.",
       "Confirm Google OAuth redirect URI includes https://time-tracking.hutech.tech/api/auth/callback/google."
     ],
+    checks: {
+      ...formatChecks,
+      googleOidcReachable,
+      googleOidcStatus
+    },
     diagnostics: getDiagnosticContext(request)
   }, { status: 500 });
 }
@@ -153,7 +179,7 @@ export async function GET(request: NextRequest, _context: AuthRouteContext) {
 
   try {
     const response = await handlers.GET(request);
-    const diagnostics = maybeReturnConfigurationDiagnostics(request, response);
+    const diagnostics = await maybeReturnConfigurationDiagnostics(request, response);
     if (diagnostics) {
       return diagnostics;
     }
