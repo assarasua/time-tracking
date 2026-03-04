@@ -21,7 +21,7 @@ export async function GET(request: NextRequest, context: AuthRouteContext) {
     );
   }
 
-  return handlers.GET(request, context);
+  return handlers.GET(request);
 }
 
 export async function POST(request: NextRequest, context: AuthRouteContext) {
@@ -36,5 +36,5 @@ export async function POST(request: NextRequest, context: AuthRouteContext) {
     );
   }
 
-  return handlers.POST(request, context);
+  return handlers.POST(request);
 }
