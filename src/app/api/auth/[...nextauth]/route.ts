@@ -122,6 +122,29 @@ function handleAuthException(error: unknown, request: NextRequest) {
   }, { status: 500 });
 }
 
+function maybeReturnConfigurationDiagnostics(request: NextRequest, response: Response) {
+  const location = response.headers.get("location");
+  if (!location || !location.includes("error=Configuration")) {
+    return null;
+  }
+
+  if (!request.nextUrl.pathname.includes("/api/auth/signin/google")) {
+    return null;
+  }
+
+  return NextResponse.json({
+    ok: false,
+    code: "auth_configuration_error",
+    error: "NextAuth returned Configuration during Google sign-in.",
+    hints: [
+      "Verify GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set on the serving platform runtime.",
+      "Ensure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET have no leading/trailing spaces.",
+      "Confirm Google OAuth redirect URI includes https://time-tracking.hutech.tech/api/auth/callback/google."
+    ],
+    diagnostics: getDiagnosticContext(request)
+  }, { status: 500 });
+}
+
 export async function GET(request: NextRequest, _context: AuthRouteContext) {
   const validationError = validateAuthRequest(request);
   if (validationError) {
@@ -129,7 +152,12 @@ export async function GET(request: NextRequest, _context: AuthRouteContext) {
   }
 
   try {
-    return handlers.GET(request);
+    const response = await handlers.GET(request);
+    const diagnostics = maybeReturnConfigurationDiagnostics(request, response);
+    if (diagnostics) {
+      return diagnostics;
+    }
+    return response;
   } catch (error) {
     return handleAuthException(error, request);
   }

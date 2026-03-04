@@ -28,12 +28,12 @@ async function getOrCreateDefaultOrganization() {
 }
 
 export const authConfig: NextAuthConfig = {
-  secret: process.env.AUTH_SECRET ?? "",
+  secret: process.env.AUTH_SECRET?.trim() ?? "",
   trustHost: getAuthTrustHost(),
   providers: [
     Google({
-      clientId: process.env.GOOGLE_CLIENT_ID ?? "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? ""
+      clientId: process.env.GOOGLE_CLIENT_ID?.trim() ?? "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET?.trim() ?? ""
     })
   ],
   session: {
