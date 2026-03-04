@@ -1,33 +1,32 @@
-import { signIn, signOut } from "@/lib/auth";
+"use client";
+
+import { signIn, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 
 export function SignInButton() {
   return (
-    <form
-      action={async () => {
-        "use server";
-        await signIn("google", { redirectTo: "/dashboard" });
-      }}
+    <Button
+      type="button"
       className="w-full"
+      onClick={() => {
+        void signIn("google", { callbackUrl: "/dashboard" });
+      }}
     >
-      <Button type="submit" className="w-full">
         Sign in with Google
-      </Button>
-    </form>
+    </Button>
   );
 }
 
 export function SignOutButton() {
   return (
-    <form
-      action={async () => {
-        "use server";
-        await signOut({ redirectTo: "/login" });
+    <Button
+      variant="secondary"
+      type="button"
+      onClick={() => {
+        void signOut({ callbackUrl: "/login" });
       }}
     >
-      <Button variant="secondary" type="submit">
         Sign out
-      </Button>
-    </form>
+    </Button>
   );
 }
