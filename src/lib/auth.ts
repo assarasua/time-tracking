@@ -2,7 +2,6 @@ import type { NextAuthConfig } from "next-auth";
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { Role } from "@prisma/client";
-import { randomUUID } from "node:crypto";
 
 import { getAuthTrustHost } from "@/lib/app-config";
 import { db } from "@/lib/db";
@@ -33,11 +32,10 @@ async function ensureProvisionedUser(params: {
   image?: string | null;
   providerAccountId?: string | null;
 }) {
-  const organization = await getOrCreateDefaultOrganization();
-  const googleSub = params.providerAccountId?.trim() || `google-fallback:${randomUUID()}`;
   const normalizedEmail =
-    params.email?.toLowerCase().trim() ||
-    `${googleSub.replace(/[^a-z0-9]/gi, "").slice(0, 40) || "user"}@no-email.local`;
+    params.email?.toLowerCase().trim() || "unknown-google-user@no-email.local";
+  const googleSub = params.providerAccountId?.trim() || `google-email:${normalizedEmail}`;
+  const organization = await getOrCreateDefaultOrganization();
 
   const existingByEmail = await db.user.findUnique({ where: { email: normalizedEmail } });
   const existingBySub = await db.user.findUnique({ where: { googleSub } });
@@ -78,8 +76,6 @@ async function ensureProvisionedUser(params: {
   await db.user.update({
     where: { id: user.id },
     data: {
-      email: normalizedEmail,
-      googleSub,
       name: params.name ?? user.name,
       avatarUrl: params.image ?? user.avatarUrl
     }
@@ -121,32 +117,40 @@ export const authConfig: NextAuthConfig = {
     error: "/auth/error"
   },
   callbacks: {
-    async signIn({ user, account }) {
-      if (account?.provider && account.provider !== "google") {
-        return true;
-      }
-      await ensureProvisionedUser({
-        email: user.email,
-        name: user.name,
-        image: user.image,
-        providerAccountId: account?.providerAccountId
-      });
-      return true;
+    async signIn({ account }) {
+      // Never block Google sign-in at callback level; provisioning runs in jwt callback.
+      return account?.provider === "google";
     },
-    async jwt({ token, user }) {
-      if (user?.email) {
-        const dbUser = await db.user.findUnique({
-          where: { email: user.email },
-          include: {
-            memberships: {
-              where: { active: true },
-              take: 1,
-              orderBy: { createdAt: "asc" }
-            }
-          }
-        });
+    async jwt({ token, user, account }) {
+      const email = user?.email ?? (typeof token.email === "string" ? token.email : null);
+      if (email) {
+        try {
+          await ensureProvisionedUser({
+            email,
+            name: user?.name ?? null,
+            image: user?.image ?? null,
+            providerAccountId: account?.providerAccountId ?? null
+          });
+        } catch (error) {
+          console.error("Failed to auto-provision user during jwt callback", { email, error });
+        }
+      }
 
-        if (dbUser && dbUser.memberships[0]) {
+      if (email) {
+        const dbUser =
+          (await db.user.findUnique({
+            where: { email },
+            include: {
+              memberships: {
+                where: { active: true },
+                take: 1,
+                orderBy: { createdAt: "asc" }
+              }
+            }
+          })) ??
+          null;
+
+        if (dbUser?.memberships[0]) {
           token.userId = dbUser.id;
           token.role = dbUser.memberships[0].role;
           token.organizationId = dbUser.memberships[0].organizationId;
