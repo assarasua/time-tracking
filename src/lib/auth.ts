@@ -27,6 +27,83 @@ async function getOrCreateDefaultOrganization() {
   });
 }
 
+async function ensureProvisionedUser(params: {
+  email?: string | null;
+  name?: string | null;
+  image?: string | null;
+  providerAccountId?: string | null;
+}) {
+  const organization = await getOrCreateDefaultOrganization();
+  const googleSub = params.providerAccountId?.trim() || `google-fallback:${randomUUID()}`;
+  const normalizedEmail =
+    params.email?.toLowerCase().trim() ||
+    `${googleSub.replace(/[^a-z0-9]/gi, "").slice(0, 40) || "user"}@no-email.local`;
+
+  const existingByEmail = await db.user.findUnique({ where: { email: normalizedEmail } });
+  const existingBySub = await db.user.findUnique({ where: { googleSub } });
+  const existingUser = existingByEmail ?? existingBySub;
+
+  const user =
+    existingUser ??
+    (await db.user.create({
+      data: {
+        email: normalizedEmail,
+        googleSub,
+        name: params.name,
+        avatarUrl: params.image
+      }
+    }));
+
+  if (!existingUser) {
+    await db.organizationUser.upsert({
+      where: {
+        organizationId_userId: {
+          organizationId: organization.id,
+          userId: user.id
+        }
+      },
+      update: {
+        active: true
+      },
+      create: {
+        organizationId: organization.id,
+        userId: user.id,
+        role: Role.employee,
+        active: true
+      }
+    });
+    return;
+  }
+
+  await db.user.update({
+    where: { id: user.id },
+    data: {
+      email: normalizedEmail,
+      googleSub,
+      name: params.name ?? user.name,
+      avatarUrl: params.image ?? user.avatarUrl
+    }
+  });
+
+  await db.organizationUser.upsert({
+    where: {
+      organizationId_userId: {
+        organizationId: organization.id,
+        userId: user.id
+      }
+    },
+    update: {
+      active: true
+    },
+    create: {
+      organizationId: organization.id,
+      userId: user.id,
+      role: Role.employee,
+      active: true
+    }
+  });
+}
+
 export const authConfig: NextAuthConfig = {
   secret: process.env.AUTH_SECRET?.trim() ?? "",
   trustHost: getAuthTrustHost(),
@@ -40,76 +117,20 @@ export const authConfig: NextAuthConfig = {
     strategy: "jwt"
   },
   pages: {
-    signIn: "/login"
+    signIn: "/login",
+    error: "/auth/error"
   },
   callbacks: {
     async signIn({ user, account }) {
-      if (account?.provider !== "google") {
-        return false;
-      }
-
-      const googleSub = account.providerAccountId ?? `google-fallback:${randomUUID()}`;
-      const normalizedEmail =
-        user.email?.toLowerCase() ?? `${googleSub.replace(/[^a-z0-9]/gi, "").slice(0, 40) || "user"}@no-email.local`;
-      const existingUser =
-        (await db.user.findUnique({ where: { email: normalizedEmail } })) ??
-        (await db.user.findUnique({ where: { googleSub } }));
-
-      if (existingUser) {
-        if (existingUser.googleSub !== googleSub || existingUser.email !== normalizedEmail) {
-          await db.user.update({
-            where: { id: existingUser.id },
-            data: {
-              googleSub,
-              email: normalizedEmail
-            }
-          });
-        }
-
-        const membership = await db.organizationUser.findFirst({
-          where: {
-            userId: existingUser.id,
-            active: true
-          }
-        });
-
-        if (!membership) {
-          const organization = await getOrCreateDefaultOrganization();
-          await db.organizationUser.create({
-            data: {
-              organizationId: organization.id,
-              userId: existingUser.id,
-              role: Role.employee,
-              active: true
-            }
-          });
-        }
-
+      if (account?.provider && account.provider !== "google") {
         return true;
       }
-
-      const organization = await getOrCreateDefaultOrganization();
-
-      const dbUser = await db.user.create({
-        data: {
-          email: normalizedEmail,
-          googleSub,
-          name: user.name,
-          avatarUrl: user.image
-        }
+      await ensureProvisionedUser({
+        email: user.email,
+        name: user.name,
+        image: user.image,
+        providerAccountId: account?.providerAccountId
       });
-
-      await db.$transaction([
-        db.organizationUser.create({
-          data: {
-            organizationId: organization.id,
-            userId: dbUser.id,
-            role: Role.employee,
-            active: true
-          }
-        })
-      ]);
-
       return true;
     },
     async jwt({ token, user }) {

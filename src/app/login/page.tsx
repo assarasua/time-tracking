@@ -15,10 +15,15 @@ export default async function LoginPage() {
       <Card className="w-full max-w-md border-primary/20 shadow-lg">
         <CardHeader>
           <CardTitle className="text-2xl">Time Tracking</CardTitle>
-          <CardDescription>Sign in with your invited Google account.</CardDescription>
+          <CardDescription>
+            Continue with Google to sign up or sign in automatically.
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <SignInButton />
+          <p className="text-xs text-muted-foreground">
+            First-time users are created automatically and granted employee access.
+          </p>
         </CardContent>
       </Card>
     </div>
