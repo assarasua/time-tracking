@@ -5,6 +5,26 @@ import { Role } from "@prisma/client";
 
 import { db } from "@/lib/db";
 
+async function getOrCreateDefaultOrganization() {
+  const existingOrg = await db.organization.findFirst({
+    orderBy: {
+      createdAt: "asc"
+    }
+  });
+
+  if (existingOrg) {
+    return existingOrg;
+  }
+
+  return db.organization.create({
+    data: {
+      name: "Default Organization",
+      timezone: "America/New_York",
+      weekStartDay: 1
+    }
+  });
+}
+
 export const authConfig: NextAuthConfig = {
   secret: process.env.AUTH_SECRET ?? "",
   providers: [
@@ -40,55 +60,21 @@ export const authConfig: NextAuthConfig = {
         });
 
         if (!membership) {
-          const invitation = await db.invitation.findFirst({
-            where: {
-              email: user.email,
-              acceptedAt: null,
-              revokedAt: null,
-              expiresAt: {
-                gt: new Date()
-              }
+          const organization = await getOrCreateDefaultOrganization();
+          await db.organizationUser.create({
+            data: {
+              organizationId: organization.id,
+              userId: existingUser.id,
+              role: Role.employee,
+              active: true
             }
           });
-
-          if (!invitation) {
-            return false;
-          }
-
-          await db.$transaction([
-            db.organizationUser.create({
-              data: {
-                organizationId: invitation.organizationId,
-                userId: existingUser.id,
-                role: invitation.role,
-                active: true
-              }
-            }),
-            db.invitation.update({
-              where: { id: invitation.id },
-              data: { acceptedAt: new Date() }
-            })
-          ]);
         }
 
         return true;
       }
 
-      const invitation = await db.invitation.findFirst({
-        where: {
-          email: user.email,
-          acceptedAt: null,
-          revokedAt: null,
-          expiresAt: {
-            gt: new Date()
-          }
-        },
-        include: { organization: true }
-      });
-
-      if (!invitation) {
-        return false;
-      }
+      const organization = await getOrCreateDefaultOrganization();
 
       const dbUser = await db.user.create({
         data: {
@@ -102,15 +88,11 @@ export const authConfig: NextAuthConfig = {
       await db.$transaction([
         db.organizationUser.create({
           data: {
-            organizationId: invitation.organizationId,
+            organizationId: organization.id,
             userId: dbUser.id,
-            role: invitation.role,
+            role: Role.employee,
             active: true
           }
-        }),
-        db.invitation.update({
-          where: { id: invitation.id },
-          data: { acceptedAt: new Date() }
         })
       ]);
 
