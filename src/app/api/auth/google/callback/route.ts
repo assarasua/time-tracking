@@ -8,6 +8,7 @@ import {
   SESSION_COOKIE_NAME,
   SESSION_TTL_SECONDS
 } from "@/lib/auth/session";
+import { getRequestBaseUrl, isRequestSecure } from "@/lib/request-url";
 
 function errorRedirect(request: NextRequest, errorCode: string) {
   return NextResponse.redirect(new URL(`/auth/error?error=${errorCode}`, request.url));
@@ -54,7 +55,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const accessToken = await exchangeGoogleCodeForAccessToken(code);
+    const callbackUrl = `${getRequestBaseUrl(request)}/api/auth/google/callback`;
+    const secureCookie = isRequestSecure(request);
+    const accessToken = await exchangeGoogleCodeForAccessToken(code, callbackUrl);
     const profile = await fetchGoogleProfile(accessToken);
 
     if (!profile.email) {
@@ -72,7 +75,7 @@ export async function GET(request: NextRequest) {
       name: SESSION_COOKIE_NAME,
       value: appSession.token,
       httpOnly: true,
-      secure: true,
+      secure: secureCookie,
       sameSite: "lax",
       path: "/",
       maxAge: SESSION_TTL_SECONDS
@@ -81,7 +84,7 @@ export async function GET(request: NextRequest) {
       name: OAUTH_STATE_COOKIE_NAME,
       value: "",
       httpOnly: true,
-      secure: true,
+      secure: secureCookie,
       sameSite: "lax",
       path: "/",
       maxAge: 0

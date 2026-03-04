@@ -11,9 +11,13 @@ function getOAuthConfig() {
   return {
     clientId: cleanEnv(process.env.GOOGLE_CLIENT_ID),
     clientSecret: cleanEnv(process.env.GOOGLE_CLIENT_SECRET),
-    redirectUri: `${getAppBaseUrl()}/api/auth/google/callback`,
     authSecret: cleanEnv(process.env.AUTH_SECRET)
   };
+}
+
+function resolveRedirectUri(explicitRedirectUri?: string) {
+  const fallback = `${getAppBaseUrl()}/api/auth/google/callback`;
+  return cleanEnv(explicitRedirectUri) || fallback;
 }
 
 export function createSignedOAuthState() {
@@ -68,15 +72,15 @@ export function verifySignedOAuthState(state: string) {
   }
 }
 
-export function buildGoogleAuthorizationUrl(state: string) {
-  const { clientId, redirectUri } = getOAuthConfig();
+export function buildGoogleAuthorizationUrl(state: string, redirectUri?: string) {
+  const { clientId } = getOAuthConfig();
   if (!clientId) {
     throw new Error("GOOGLE_CLIENT_ID is required");
   }
 
   const url = new URL(GOOGLE_AUTH_URL);
   url.searchParams.set("client_id", clientId);
-  url.searchParams.set("redirect_uri", redirectUri);
+  url.searchParams.set("redirect_uri", resolveRedirectUri(redirectUri));
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", "openid email profile");
   url.searchParams.set("state", state);
@@ -86,8 +90,8 @@ export function buildGoogleAuthorizationUrl(state: string) {
   return url;
 }
 
-export async function exchangeGoogleCodeForAccessToken(code: string) {
-  const { clientId, clientSecret, redirectUri } = getOAuthConfig();
+export async function exchangeGoogleCodeForAccessToken(code: string, redirectUri?: string) {
+  const { clientId, clientSecret } = getOAuthConfig();
   if (!clientId || !clientSecret) {
     throw new Error("Google OAuth credentials are missing");
   }
@@ -96,7 +100,7 @@ export async function exchangeGoogleCodeForAccessToken(code: string) {
     code,
     client_id: clientId,
     client_secret: clientSecret,
-    redirect_uri: redirectUri,
+    redirect_uri: resolveRedirectUri(redirectUri),
     grant_type: "authorization_code"
   });
 

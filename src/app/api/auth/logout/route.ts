@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { isRequestSecure } from "@/lib/request-url";
 import { revokeAppSessionByToken, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
 async function logout(request: NextRequest) {
@@ -11,7 +12,7 @@ async function logout(request: NextRequest) {
     name: SESSION_COOKIE_NAME,
     value: "",
     httpOnly: true,
-    secure: true,
+    secure: isRequestSecure(request),
     sameSite: "lax",
     path: "/",
     maxAge: 0
