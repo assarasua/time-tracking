@@ -17,6 +17,7 @@ function errorRedirect(request: NextRequest, errorCode: string) {
 function classifyAuthError(error: unknown) {
   const err = error as { message?: string; code?: string; name?: string };
   const message = String(err?.message ?? "");
+  const normalizedMessage = message.toLowerCase();
   const prismaCode = typeof err?.code === "string" ? err.code : undefined;
 
   if (message.includes("Google token exchange failed")) {
@@ -29,6 +30,21 @@ function classifyAuthError(error: unknown) {
     return { code: "profile_missing_email", detail: "google_profile_invalid" };
   }
   if (err?.name?.includes("PrismaClientInitializationError")) {
+    if (
+      normalizedMessage.includes("unable to run in this browser environment") ||
+      normalizedMessage.includes("edge runtime")
+    ) {
+      return { code: "session_create_failed", detail: "db_runtime_unsupported" };
+    }
+    if (normalizedMessage.includes("can't reach database server")) {
+      return { code: "session_create_failed", detail: "db_unreachable" };
+    }
+    if (normalizedMessage.includes("authentication failed")) {
+      return { code: "session_create_failed", detail: "db_auth_failed" };
+    }
+    if (normalizedMessage.includes("ssl")) {
+      return { code: "session_create_failed", detail: "db_ssl_error" };
+    }
     return { code: "session_create_failed", detail: "db_initialization_failed" };
   }
   if (prismaCode === "P2021") {

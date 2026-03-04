@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 import { getAppBaseUrl } from "@/lib/app-config";
+import { db } from "@/lib/db";
 import { cleanEnv } from "@/lib/env-utils";
 import { getRequestBaseUrl } from "@/lib/request-url";
 
@@ -56,4 +57,59 @@ export function getAuthDiagnostics(request?: NextRequest) {
       }
     }
   };
+}
+
+function classifyDbError(error: unknown) {
+  const err = error as { message?: string; name?: string; code?: string };
+  const message = String(err?.message ?? "").toLowerCase();
+  const prismaCode = typeof err?.code === "string" ? err.code : null;
+
+  if (err?.name?.includes("PrismaClientInitializationError")) {
+    if (message.includes("unable to run in this browser environment") || message.includes("edge runtime")) {
+      return "db_runtime_unsupported";
+    }
+    if (message.includes("can't reach database server")) {
+      return "db_unreachable";
+    }
+    if (message.includes("authentication failed")) {
+      return "db_auth_failed";
+    }
+    if (message.includes("ssl")) {
+      return "db_ssl_error";
+    }
+    return "db_initialization_failed";
+  }
+
+  if (prismaCode === "P2021") return "db_schema_missing";
+  if (prismaCode) return `prisma_${prismaCode.toLowerCase()}`;
+  return "db_unknown";
+}
+
+export async function getDatabaseDiagnostics() {
+  const databaseUrl = cleanEnv(process.env.DATABASE_URL);
+  if (!databaseUrl) {
+    return {
+      ok: false,
+      skipped: true,
+      detail: "db_env_missing"
+    };
+  }
+
+  try {
+    await db.$queryRawUnsafe("SELECT 1");
+    return {
+      ok: true,
+      skipped: false,
+      detail: "db_ok"
+    };
+  } catch (error) {
+    const err = error as { message?: string; name?: string };
+    return {
+      ok: false,
+      skipped: false,
+      detail: classifyDbError(error),
+      errorName: err?.name ?? "UnknownError",
+      message: String(err?.message ?? "").slice(0, 240)
+    };
+  }
 }
