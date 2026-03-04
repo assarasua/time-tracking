@@ -8,7 +8,6 @@ const REQUIRED_AUTH_ENV_VARS = [
   "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
   "AUTH_SECRET",
-  "APP_BASE_URL",
   "DATABASE_URL"
 ] as const;
 
@@ -28,6 +27,7 @@ export function getAuthDiagnostics(request?: NextRequest) {
 
   const missing = REQUIRED_AUTH_ENV_VARS.filter((key) => !envStatus[key].present);
   const appBaseUrl = getAppBaseUrl();
+  const appBaseUrlFromEnv = cleanEnv(process.env.APP_BASE_URL);
   const requestBaseUrl = request ? getRequestBaseUrl(request) : null;
 
   return {
@@ -37,6 +37,7 @@ export function getAuthDiagnostics(request?: NextRequest) {
       envStatus,
       config: {
         appBaseUrl,
+        appBaseUrlSource: appBaseUrlFromEnv ? "env" : "code_default",
         expectedGoogleRedirectUriFromEnv: `${appBaseUrl}/api/auth/google/callback`,
         expectedGoogleRedirectUriFromRequest: requestBaseUrl
           ? `${requestBaseUrl}/api/auth/google/callback`
@@ -56,4 +57,3 @@ export function getAuthDiagnostics(request?: NextRequest) {
     }
   };
 }
-
