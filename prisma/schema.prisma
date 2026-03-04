@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  employee
+  admin
+}
+
+enum UserStatus {
+  active
+  disabled
+}
+
+model Organization {
+  id            String             @id @default(cuid())
+  name          String
+  timezone      String             @default("America/New_York")
+  weekStartDay  Int                @default(1)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  memberships   OrganizationUser[]
+  invitations   Invitation[]
+  weekLocks     WeekLock[]
+}
+
+model User {
+  id            String             @id @default(cuid())
+  email         String             @unique
+  googleSub     String             @unique
+  name          String?
+  avatarUrl     String?
+  status        UserStatus         @default(active)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  memberships   OrganizationUser[]
+  sessions      TimeSession[]      @relation("SessionOwner")
+  edits         TimeSession[]      @relation("SessionEditor")
+  audits        AuditLog[]         @relation("AuditActor")
+  lockedWeeks   WeekLock[]         @relation("LockActor")
+}
+
+model OrganizationUser {
+  id                 String      @id @default(cuid())
+  organizationId     String
+  userId             String
+  role               Role
+  weeklyTargetMinute Int         @default(2400)
+  active             Boolean     @default(true)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timeSessions       TimeSession[]
+
+  @@unique([organizationId, userId])
+  @@index([organizationId, role])
+}
+
+model Invitation {
+  id             String       @id @default(cuid())
+  organizationId String
+  email          String
+  role           Role         @default(employee)
+  tokenHash      String       @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  revokedAt      DateTime?
+  createdById    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, email])
+}
+
+model TimeSession {
+  id                 String            @id @default(cuid())
+  organizationUserId String
+  userId             String
+  startAt            DateTime
+  endAt              DateTime?
+  editedById         String?
+  editReason         String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  organizationUser   OrganizationUser  @relation(fields: [organizationUserId], references: [id], onDelete: Cascade)
+  user               User              @relation("SessionOwner", fields: [userId], references: [id], onDelete: Cascade)
+  editedBy           User?             @relation("SessionEditor", fields: [editedById], references: [id])
+
+  @@index([organizationUserId, startAt])
+  @@index([userId, endAt])
+}
+
+model WeekLock {
+  id             String       @id @default(cuid())
+  organizationId String
+  weekStart      DateTime
+  lockedAt       DateTime     @default(now())
+  lockedByUserId String?
+  autoLocked     Boolean      @default(false)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lockedBy       User?        @relation("LockActor", fields: [lockedByUserId], references: [id])
+
+  @@unique([organizationId, weekStart])
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  actorUserId String?
+  entityType  String
+  entityId    String
+  action      String
+  beforeJson  Json?
+  afterJson   Json?
+  createdAt   DateTime  @default(now())
+  actor       User?     @relation("AuditActor", fields: [actorUserId], references: [id])
+
+  @@index([entityType, entityId, createdAt])
+}
