@@ -7,8 +7,8 @@ export async function writeAuditLog(params: {
   entityType: string;
   entityId: string;
   action: string;
-  beforeJson?: Prisma.JsonValue;
-  afterJson?: Prisma.JsonValue;
+  beforeJson?: Prisma.InputJsonValue | null;
+  afterJson?: Prisma.InputJsonValue | null;
 }) {
   await db.auditLog.create({
     data: {
@@ -16,8 +16,8 @@ export async function writeAuditLog(params: {
       entityType: params.entityType,
       entityId: params.entityId,
       action: params.action,
-      beforeJson: params.beforeJson,
-      afterJson: params.afterJson
+      beforeJson: params.beforeJson ?? undefined,
+      afterJson: params.afterJson ?? undefined
     }
   });
 }

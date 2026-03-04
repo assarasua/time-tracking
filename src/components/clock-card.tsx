@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 type Session = {
   id: string;
   startAt: string;
@@ -67,44 +70,53 @@ export function ClockCard() {
     await loadSummary();
   }
 
+  const statTiles = [
+    { label: "Worked", value: formatMinutes(summary?.workedMinutes ?? 0) },
+    { label: "Expected", value: formatMinutes(summary?.expectedMinutes ?? 0) },
+    { label: "Variance", value: formatMinutes(summary?.varianceMinutes ?? 0) }
+  ];
+
   return (
-    <div className="card stack">
-      <div className="row">
-        <h3 style={{ margin: 0 }}>This week</h3>
-        <span>{status}</span>
-      </div>
-
-      <div className="grid-two">
-        <div>
-          <small>Worked</small>
-          <div>{formatMinutes(summary?.workedMinutes ?? 0)}</div>
+    <Card>
+      <CardHeader className="flex-row items-center justify-between space-y-0">
+        <CardTitle>This week</CardTitle>
+        <span className="rounded-md bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">{status}</span>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="grid gap-3 sm:grid-cols-3">
+          {statTiles.map((tile) => (
+            <div key={tile.label} className="rounded-md border border-border bg-muted/70 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">{tile.label}</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{tile.value}</p>
+            </div>
+          ))}
         </div>
-        <div>
-          <small>Expected</small>
-          <div>{formatMinutes(summary?.expectedMinutes ?? 0)}</div>
+
+        {activeSession ? (
+          <Button onClick={clockOut} className="w-full sm:w-auto">
+            Clock out
+          </Button>
+        ) : (
+          <Button onClick={clockIn} className="w-full sm:w-auto">
+            Clock in
+          </Button>
+        )}
+
+        <div className="space-y-2">
+          <h4 className="text-sm font-semibold text-foreground">Recent sessions</h4>
+          {(summary?.sessions ?? []).slice(-5).reverse().map((session) => (
+            <div
+              key={session.id}
+              className="flex flex-col justify-between gap-1 rounded-md border border-border bg-background p-3 text-sm sm:flex-row sm:items-center"
+            >
+              <span className="text-foreground">{new Date(session.startAt).toLocaleString()}</span>
+              <span className="text-muted-foreground">
+                {session.endAt ? new Date(session.endAt).toLocaleTimeString() : "Active"}
+              </span>
+            </div>
+          ))}
         </div>
-      </div>
-
-      <div>
-        <small>Variance</small>
-        <div>{formatMinutes(summary?.varianceMinutes ?? 0)}</div>
-      </div>
-
-      {activeSession ? (
-        <button onClick={clockOut}>Clock out</button>
-      ) : (
-        <button onClick={clockIn}>Clock in</button>
-      )}
-
-      <div className="stack">
-        <strong>Recent sessions</strong>
-        {(summary?.sessions ?? []).slice(-5).reverse().map((session) => (
-          <div key={session.id} className="row" style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-            <span>{new Date(session.startAt).toLocaleString()}</span>
-            <span>{session.endAt ? new Date(session.endAt).toLocaleTimeString() : "Active"}</span>
-          </div>
-        ))}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

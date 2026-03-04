@@ -131,7 +131,7 @@ export const authConfig: NextAuthConfig = {
       return token;
     },
     async session({ session, token }) {
-      if (session.user && token.userId && token.organizationId) {
+      if (session.user && typeof token.userId === "string" && typeof token.organizationId === "string") {
         session.user.id = token.userId;
         session.user.role = (token.role as Role | undefined) ?? Role.employee;
         session.user.organizationId = token.organizationId;

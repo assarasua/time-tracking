@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+
 export function InviteForm() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("employee");
@@ -28,21 +32,23 @@ export function InviteForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="stack">
-      <h3 style={{ margin: 0 }}>Invite user</h3>
-      <input
+    <form onSubmit={onSubmit} className="space-y-4">
+      <h3 className="text-lg font-semibold text-foreground">Invite user</h3>
+      <Input
         type="email"
         value={email}
         onChange={(event) => setEmail(event.target.value)}
         placeholder="employee@company.com"
         required
       />
-      <select value={role} onChange={(event) => setRole(event.target.value)}>
+      <Select value={role} onChange={(event) => setRole(event.target.value)}>
         <option value="employee">Employee</option>
         <option value="admin">Admin</option>
-      </select>
-      <button type="submit">Send invite</button>
-      {message ? <small>{message}</small> : null}
+      </Select>
+      <Button type="submit" className="w-full sm:w-auto">
+        Send invite
+      </Button>
+      {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
     </form>
   );
 }

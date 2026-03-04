@@ -1,4 +1,5 @@
 import { signIn, signOut } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
 
 export function SignInButton() {
   return (
@@ -7,8 +8,11 @@ export function SignInButton() {
         "use server";
         await signIn("google", { redirectTo: "/dashboard" });
       }}
+      className="w-full"
     >
-      <button type="submit">Sign in with Google</button>
+      <Button type="submit" className="w-full">
+        Sign in with Google
+      </Button>
     </form>
   );
 }
@@ -21,9 +25,9 @@ export function SignOutButton() {
         await signOut({ redirectTo: "/login" });
       }}
     >
-      <button className="secondary" type="submit">
+      <Button variant="secondary" type="submit">
         Sign out
-      </button>
+      </Button>
     </form>
   );
 }

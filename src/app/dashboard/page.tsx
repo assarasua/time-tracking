@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 
-import { AppNav } from "@/components/nav";
 import { ClockCard } from "@/components/clock-card";
+import { AppNav } from "@/components/nav";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
 
 export default async function DashboardPage() {
@@ -12,12 +13,17 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="stack">
+    <div className="space-y-5">
       <AppNav role={session.user.role} />
-      <div className="card">
-        <h2 style={{ marginTop: 0 }}>Welcome, {session.user.name ?? session.user.email}</h2>
-        <p style={{ marginBottom: 0 }}>Track daily sessions and monitor weekly worked hours.</p>
-      </div>
+      <Card className="border-primary/20">
+        <CardHeader>
+          <CardTitle>Welcome, {session.user.name ?? session.user.email}</CardTitle>
+          <CardDescription>Track daily sessions and monitor weekly worked hours.</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="h-1 w-20 rounded-full bg-primary" />
+        </CardContent>
+      </Card>
       <ClockCard />
     </div>
   );
