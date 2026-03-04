@@ -5,6 +5,7 @@ import { Role } from "@prisma/client";
 
 import { getAuthTrustHost } from "@/lib/app-config";
 import { db } from "@/lib/db";
+import { cleanEnv } from "@/lib/env-utils";
 
 async function getOrCreateDefaultOrganization() {
   const existingOrg = await db.organization.findFirst({
@@ -101,12 +102,12 @@ async function ensureProvisionedUser(params: {
 }
 
 export const authConfig: NextAuthConfig = {
-  secret: process.env.AUTH_SECRET?.trim() ?? "",
+  secret: cleanEnv(process.env.AUTH_SECRET),
   trustHost: getAuthTrustHost(),
   providers: [
     Google({
-      clientId: process.env.GOOGLE_CLIENT_ID?.trim() ?? "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET?.trim() ?? ""
+      clientId: cleanEnv(process.env.GOOGLE_CLIENT_ID),
+      clientSecret: cleanEnv(process.env.GOOGLE_CLIENT_SECRET)
     })
   ],
   session: {
