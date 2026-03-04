@@ -1,22 +1,22 @@
 import { Resend } from "resend";
 
-import { env } from "@/lib/env";
-
 function getClient() {
-  if (!env.EMAIL_API_KEY) {
+  const apiKey = process.env.EMAIL_API_KEY;
+  if (!apiKey) {
     return null;
   }
-  return new Resend(env.EMAIL_API_KEY);
+  return new Resend(apiKey);
 }
 
 export async function sendEmail(params: { to: string; subject: string; html: string }) {
   const client = getClient();
-  if (!client || !env.EMAIL_FROM_ADDRESS) {
+  const from = process.env.EMAIL_FROM_ADDRESS;
+  if (!client || !from) {
     return;
   }
 
   await client.emails.send({
-    from: env.EMAIL_FROM_ADDRESS,
+    from,
     to: params.to,
     subject: params.subject,
     html: params.html

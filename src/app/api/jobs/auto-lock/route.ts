@@ -2,12 +2,11 @@ import { subWeeks } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
-import { env } from "@/lib/env";
 import { getWeekRange } from "@/lib/time";
 
 export async function POST(request: NextRequest) {
   const secret = request.headers.get("x-cron-secret");
-  if (!env.CRON_SECRET || secret !== env.CRON_SECRET) {
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

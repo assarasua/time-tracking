@@ -4,7 +4,6 @@ import Google from "next-auth/providers/google";
 import { Role } from "@prisma/client";
 
 import { db } from "@/lib/db";
-import { env } from "@/lib/env";
 
 async function findMembership(userId: string) {
   const membership = await db.organizationUser.findFirst({
@@ -26,11 +25,11 @@ async function findMembership(userId: string) {
 }
 
 export const authConfig: NextAuthConfig = {
-  secret: env.AUTH_SECRET,
+  secret: process.env.AUTH_SECRET ?? "",
   providers: [
     Google({
-      clientId: env.GOOGLE_CLIENT_ID,
-      clientSecret: env.GOOGLE_CLIENT_SECRET
+      clientId: process.env.GOOGLE_CLIENT_ID ?? "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? ""
     })
   ],
   session: {
