@@ -5,25 +5,6 @@ import { Role } from "@prisma/client";
 
 import { db } from "@/lib/db";
 
-async function findMembership(userId: string) {
-  const membership = await db.organizationUser.findFirst({
-    where: {
-      userId,
-      active: true,
-      organization: {
-        id: {
-          not: ""
-        }
-      }
-    },
-    include: {
-      organization: true
-    }
-  });
-
-  return membership;
-}
-
 export const authConfig: NextAuthConfig = {
   secret: process.env.AUTH_SECRET ?? "",
   providers: [
@@ -44,33 +25,52 @@ export const authConfig: NextAuthConfig = {
         return false;
       }
 
-      const existingUser = await db.user.findUnique({
-        where: { email: user.email }
-      });
+      const existingUser = await db.user.findUnique({ where: { email: user.email } });
 
-      const dbUser =
-        existingUser ??
-        (await db.user.create({
-          data: {
-            email: user.email,
-            googleSub: account.providerAccountId,
-            name: user.name,
-            avatarUrl: user.image
-          }
-        }));
-
-      if (existingUser && existingUser.googleSub !== account.providerAccountId) {
-        return false;
-      }
-
-      const membership = await findMembership(dbUser.id);
-      if (membership) {
-        if (dbUser.googleSub !== account.providerAccountId) {
-          await db.user.update({
-            where: { id: dbUser.id },
-            data: { googleSub: account.providerAccountId }
-          });
+      if (existingUser) {
+        if (existingUser.googleSub !== account.providerAccountId) {
+          return false;
         }
+
+        const membership = await db.organizationUser.findFirst({
+          where: {
+            userId: existingUser.id,
+            active: true
+          }
+        });
+
+        if (!membership) {
+          const invitation = await db.invitation.findFirst({
+            where: {
+              email: user.email,
+              acceptedAt: null,
+              revokedAt: null,
+              expiresAt: {
+                gt: new Date()
+              }
+            }
+          });
+
+          if (!invitation) {
+            return false;
+          }
+
+          await db.$transaction([
+            db.organizationUser.create({
+              data: {
+                organizationId: invitation.organizationId,
+                userId: existingUser.id,
+                role: invitation.role,
+                active: true
+              }
+            }),
+            db.invitation.update({
+              where: { id: invitation.id },
+              data: { acceptedAt: new Date() }
+            })
+          ]);
+        }
+
         return true;
       }
 
@@ -89,6 +89,15 @@ export const authConfig: NextAuthConfig = {
       if (!invitation) {
         return false;
       }
+
+      const dbUser = await db.user.create({
+        data: {
+          email: user.email,
+          googleSub: account.providerAccountId,
+          name: user.name,
+          avatarUrl: user.image
+        }
+      });
 
       await db.$transaction([
         db.organizationUser.create({
