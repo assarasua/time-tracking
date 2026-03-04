@@ -3,6 +3,7 @@ import { addDays } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
 
 import { writeAuditLog } from "@/lib/audit";
+import { getAppBaseUrl } from "@/lib/app-config";
 import { sendEmail } from "@/lib/email";
 import { db } from "@/lib/db";
 import { ensureAdmin, requireSession } from "@/lib/rbac";
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
   await sendEmail({
     to: invitation.email,
     subject: "You are invited to Time Tracking",
-    html: `<p>You were invited to Time Tracking. Sign in with Google using this email: ${invitation.email}</p><p>App URL: ${process.env.APP_BASE_URL ?? "http://localhost:3000"}</p>`
+    html: `<p>You were invited to Time Tracking. Sign in with Google using this email: ${invitation.email}</p><p>App URL: ${getAppBaseUrl()}</p>`
   });
 
   return NextResponse.json({ id: invitation.id, email: invitation.email, role: invitation.role }, { status: 201 });

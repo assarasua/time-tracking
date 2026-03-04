@@ -1,7 +1,8 @@
 import { handlers } from "@/lib/auth";
+import { getAppBaseUrl } from "@/lib/app-config";
 import { NextRequest, NextResponse } from "next/server";
 
-const requiredAuthEnv = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "AUTH_SECRET", "APP_BASE_URL"] as const;
+const requiredAuthEnv = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "AUTH_SECRET"] as const;
 
 function getMissingAuthEnv() {
   return requiredAuthEnv.filter((key) => {
@@ -35,6 +36,9 @@ function getDiagnosticContext(request: NextRequest) {
 
   return {
     envStatus,
+    appBaseUrlEffective: getAppBaseUrl(),
+    appBaseUrlSource: process.env.APP_BASE_URL?.trim() ? "env" : "default",
+    authTrustHostEffective: process.env.AUTH_TRUST_HOST?.trim() ? process.env.AUTH_TRUST_HOST : "true (default)",
     request: {
       path: request.nextUrl.pathname,
       host: request.headers.get("host"),
@@ -63,7 +67,7 @@ function validateAuthRequest(request: NextRequest) {
   }
 
   try {
-    const expected = new URL(process.env.APP_BASE_URL as string);
+    const expected = new URL(getAppBaseUrl());
     const actualBase = getRequestBaseUrl(request);
     if (!actualBase) {
       return NextResponse.json({

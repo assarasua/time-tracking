@@ -3,6 +3,7 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { Role } from "@prisma/client";
 
+import { getAuthTrustHost } from "@/lib/app-config";
 import { db } from "@/lib/db";
 
 async function getOrCreateDefaultOrganization() {
@@ -27,6 +28,7 @@ async function getOrCreateDefaultOrganization() {
 
 export const authConfig: NextAuthConfig = {
   secret: process.env.AUTH_SECRET ?? "",
+  trustHost: getAuthTrustHost(),
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
