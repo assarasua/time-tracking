@@ -5,25 +5,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 type SearchParams = Promise<{ error?: string }>;
 
 const errorCopy: Record<string, { title: string; description: string }> = {
-  AccessDenied: {
-    title: "Sign-in Was Blocked",
-    description: "Your sign-in was blocked by auth policy or profile validation. Try again or use a different Google account."
+  oauth_state_invalid: {
+    title: "Session Verification Failed",
+    description: "Your login state could not be verified. Please retry sign in from the login page."
   },
-  Configuration: {
-    title: "Authentication Configuration Error",
-    description: "The server auth provider settings are not valid at runtime. Contact support if this persists."
+  oauth_exchange_failed: {
+    title: "Google Token Exchange Failed",
+    description: "The server could not complete OAuth token exchange with Google. Please try again."
   },
-  OAuthSignin: {
-    title: "Google Sign-in Start Failed",
-    description: "The app could not initialize Google OAuth. Please retry in a few seconds."
+  profile_missing_email: {
+    title: "Google Profile Missing Email",
+    description: "Your Google profile did not include a verified email, so account creation could not continue."
   },
-  OAuthCallback: {
-    title: "Google Callback Failed",
-    description: "Google returned an invalid callback response. Please retry sign-in."
+  session_create_failed: {
+    title: "Session Creation Failed",
+    description: "Your account was authenticated, but app session creation failed. Please retry."
+  },
+  oauth_provider_misconfigured: {
+    title: "Google OAuth Misconfigured",
+    description: "Google OAuth credentials or callback configuration are invalid at runtime."
   },
   default: {
     title: "Unable To Sign In",
-    description: "An unexpected authentication error occurred. Please retry sign-in."
+    description: "An unexpected authentication error occurred. Please retry sign in."
   }
 };
 

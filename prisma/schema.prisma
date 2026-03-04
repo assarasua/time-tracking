@@ -27,6 +27,7 @@ model Organization {
   memberships   OrganizationUser[]
   invitations   Invitation[]
   weekLocks     WeekLock[]
+  appSessions   AppSession[]
 }
 
 model User {
@@ -43,17 +44,18 @@ model User {
   edits         TimeSession[]      @relation("SessionEditor")
   audits        AuditLog[]         @relation("AuditActor")
   lockedWeeks   WeekLock[]         @relation("LockActor")
+  appSessions   AppSession[]
 }
 
 model OrganizationUser {
-  id                 String      @id @default(cuid())
+  id                 String       @id @default(cuid())
   organizationId     String
   userId             String
   role               Role
-  weeklyTargetMinute Int         @default(2400)
-  active             Boolean     @default(true)
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
+  weeklyTargetMinute Int          @default(2400)
+  active             Boolean      @default(true)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
   organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   timeSessions       TimeSession[]
@@ -80,18 +82,18 @@ model Invitation {
 }
 
 model TimeSession {
-  id                 String            @id @default(cuid())
+  id                 String           @id @default(cuid())
   organizationUserId String
   userId             String
   startAt            DateTime
   endAt              DateTime?
   editedById         String?
   editReason         String?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  organizationUser   OrganizationUser  @relation(fields: [organizationUserId], references: [id], onDelete: Cascade)
-  user               User              @relation("SessionOwner", fields: [userId], references: [id], onDelete: Cascade)
-  editedBy           User?             @relation("SessionEditor", fields: [editedById], references: [id])
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  organizationUser   OrganizationUser @relation(fields: [organizationUserId], references: [id], onDelete: Cascade)
+  user               User             @relation("SessionOwner", fields: [userId], references: [id], onDelete: Cascade)
+  editedBy           User?            @relation("SessionEditor", fields: [editedById], references: [id])
 
   @@index([organizationUserId, startAt])
   @@index([userId, endAt])
@@ -111,15 +113,32 @@ model WeekLock {
 }
 
 model AuditLog {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   actorUserId String?
   entityType  String
   entityId    String
   action      String
   beforeJson  Json?
   afterJson   Json?
-  createdAt   DateTime  @default(now())
-  actor       User?     @relation("AuditActor", fields: [actorUserId], references: [id])
+  createdAt   DateTime @default(now())
+  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id])
 
   @@index([entityType, entityId, createdAt])
+}
+
+model AppSession {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  tokenHash      String       @unique
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  revokedAt      DateTime?
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@index([userId, expiresAt])
+  @@index([organizationId, expiresAt])
+  @@index([expiresAt])
 }

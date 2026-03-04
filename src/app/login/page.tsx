@@ -22,7 +22,7 @@ export default async function LoginPage() {
         <CardContent className="space-y-3">
           <SignInButton />
           <p className="text-xs text-muted-foreground">
-            First-time users are created automatically and granted employee access.
+            New users are provisioned automatically. First successful user becomes admin.
           </p>
         </CardContent>
       </Card>
