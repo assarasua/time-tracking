@@ -34,24 +34,50 @@ export async function provisionUserFromGoogleProfile(profile: GoogleProfile) {
 
     const user =
       existing ??
-      (await tx.user.create({
-        data: {
-          email: normalizedEmail,
-          googleSub: profile.sub,
-          name: profile.name,
-          avatarUrl: profile.picture
-        }
-      }));
+      (await tx.user
+        .create({
+          data: {
+            email: normalizedEmail,
+            googleSub: profile.sub,
+            name: profile.name,
+            avatarUrl: profile.picture
+          }
+        })
+        .catch(async (error) => {
+          const prismaError = error as { code?: string };
+          if (prismaError.code !== "P2002") {
+            throw error;
+          }
+
+          // Handle race/collision by reloading whichever unique key exists.
+          const bySub = await tx.user.findUnique({ where: { googleSub: profile.sub } });
+          if (bySub) {
+            return bySub;
+          }
+          const byEmail = await tx.user.findUnique({ where: { email: normalizedEmail } });
+          if (byEmail) {
+            return byEmail;
+          }
+          throw error;
+        }));
+
+    const updateData: Prisma.UserUpdateInput = {
+      name: profile.name ?? user.name,
+      avatarUrl: profile.picture ?? user.avatarUrl,
+      status: "active"
+    };
+
+    // Avoid unique collisions when legacy rows conflict on email/sub.
+    if (!existingByEmail || existingByEmail.id === user.id) {
+      updateData.email = normalizedEmail;
+    }
+    if (!existingBySub || existingBySub.id === user.id) {
+      updateData.googleSub = profile.sub;
+    }
 
     await tx.user.update({
       where: { id: user.id },
-      data: {
-        email: normalizedEmail,
-        googleSub: profile.sub,
-        name: profile.name ?? user.name,
-        avatarUrl: profile.picture ?? user.avatarUrl,
-        status: "active"
-      }
+      data: updateData
     });
 
     let membership = await tx.organizationUser.findUnique({

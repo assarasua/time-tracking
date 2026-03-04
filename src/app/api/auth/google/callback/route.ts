@@ -13,6 +13,33 @@ function errorRedirect(request: NextRequest, errorCode: string) {
   return NextResponse.redirect(new URL(`/auth/error?error=${errorCode}`, request.url));
 }
 
+function classifyAuthError(error: unknown) {
+  const err = error as { message?: string; code?: string; name?: string };
+  const message = String(err?.message ?? "");
+  const prismaCode = typeof err?.code === "string" ? err.code : undefined;
+
+  if (message.includes("Google token exchange failed")) {
+    return { code: "oauth_exchange_failed", detail: "google_token_exchange_failed" };
+  }
+  if (
+    message.includes("Google profile is missing required sub/email fields") ||
+    message.includes("Google profile email is not verified")
+  ) {
+    return { code: "profile_missing_email", detail: "google_profile_invalid" };
+  }
+  if (err?.name?.includes("PrismaClientInitializationError")) {
+    return { code: "session_create_failed", detail: "db_initialization_failed" };
+  }
+  if (prismaCode === "P2021") {
+    return { code: "session_create_failed", detail: "db_schema_missing" };
+  }
+  if (prismaCode) {
+    return { code: "session_create_failed", detail: `prisma_${prismaCode.toLowerCase()}` };
+  }
+
+  return { code: "session_create_failed", detail: "unknown" };
+}
+
 export async function GET(request: NextRequest) {
   const state = request.nextUrl.searchParams.get("state");
   const code = request.nextUrl.searchParams.get("code");
@@ -62,7 +89,14 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error("auth.google.callback.failed", { error });
-    return errorRedirect(request, "session_create_failed");
+    const classified = classifyAuthError(error);
+    console.error("auth.google.callback.failed", {
+      errorCode: classified.code,
+      errorDetail: classified.detail,
+      error
+    });
+    return NextResponse.redirect(
+      new URL(`/auth/error?error=${classified.code}&detail=${classified.detail}`, request.url)
+    );
   }
 }

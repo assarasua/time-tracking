@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-type SearchParams = Promise<{ error?: string }>;
+type SearchParams = Promise<{ error?: string; detail?: string }>;
 
 const errorCopy: Record<string, { title: string; description: string }> = {
   oauth_state_invalid: {
@@ -19,7 +19,12 @@ const errorCopy: Record<string, { title: string; description: string }> = {
   },
   session_create_failed: {
     title: "Session Creation Failed",
-    description: "Your account was authenticated, but app session creation failed. Please retry."
+    description:
+      "Your Google account was authenticated, but app session creation failed. Please retry or share the detail code with support."
+  },
+  provisioning_failed: {
+    title: "Account Provisioning Failed",
+    description: "Authentication succeeded but user provisioning failed while preparing your account."
   },
   oauth_provider_misconfigured: {
     title: "Google OAuth Misconfigured",
@@ -34,6 +39,7 @@ const errorCopy: Record<string, { title: string; description: string }> = {
 export default async function AuthErrorPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const errorKey = params.error ?? "default";
+  const detail = params.detail;
   const copy = errorCopy[errorKey] ?? errorCopy.default;
 
   return (
@@ -46,6 +52,12 @@ export default async function AuthErrorPage({ searchParams }: { searchParams: Se
         <CardContent className="space-y-4">
           <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
             Error code: <span className="font-mono text-foreground">{errorKey}</span>
+            {detail ? (
+              <>
+                <br />
+                Detail: <span className="font-mono text-foreground">{detail}</span>
+              </>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-3">
             <Link
