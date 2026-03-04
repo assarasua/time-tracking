@@ -3,6 +3,8 @@ import { Prisma, Role } from "@prisma/client";
 import { db } from "@/lib/db";
 import type { GoogleProfile } from "@/lib/auth/google";
 
+const FORCED_ADMIN_EMAILS = new Set(["h@hutech.ventures"]);
+
 async function getOrCreateDefaultOrganizationTx(tx: Prisma.TransactionClient) {
   const existing = await tx.organization.findFirst({
     orderBy: {
@@ -97,7 +99,7 @@ export async function provisionUserFromGoogleProfile(profile: GoogleProfile) {
         }
       });
 
-      const role = memberCount === 0 ? Role.admin : Role.employee;
+      const role = memberCount === 0 || FORCED_ADMIN_EMAILS.has(normalizedEmail) ? Role.admin : Role.employee;
 
       try {
         membership = await tx.organizationUser.create({
@@ -133,6 +135,13 @@ export async function provisionUserFromGoogleProfile(profile: GoogleProfile) {
       membership = await tx.organizationUser.update({
         where: { id: membership.id },
         data: { active: true }
+      });
+    }
+
+    if (FORCED_ADMIN_EMAILS.has(normalizedEmail) && membership.role !== Role.admin) {
+      membership = await tx.organizationUser.update({
+        where: { id: membership.id },
+        data: { role: Role.admin, active: true }
       });
     }
 

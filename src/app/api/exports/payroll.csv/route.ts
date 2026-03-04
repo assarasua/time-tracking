@@ -18,7 +18,8 @@ export async function GET(request: NextRequest) {
 
   const query = exportQuerySchema.safeParse({
     from: request.nextUrl.searchParams.get("from"),
-    to: request.nextUrl.searchParams.get("to")
+    to: request.nextUrl.searchParams.get("to"),
+    membership_id: request.nextUrl.searchParams.get("membership_id") ?? undefined
   });
 
   if (!query.success) {
@@ -27,11 +28,13 @@ export async function GET(request: NextRequest) {
 
   const from = new Date(`${query.data.from}T00:00:00.000Z`);
   const to = new Date(`${query.data.to}T23:59:59.999Z`);
+  const membershipId = query.data.membership_id;
 
   const memberships = await db.organizationUser.findMany({
     where: {
       organizationId: authResult.membership.organizationId,
-      active: true
+      active: true,
+      ...(membershipId ? { id: membershipId } : {})
     },
     include: {
       user: true,
@@ -45,6 +48,10 @@ export async function GET(request: NextRequest) {
       }
     }
   });
+
+  if (membershipId && memberships.length === 0) {
+    return NextResponse.json({ error: "Membership not found in this organization" }, { status: 404 });
+  }
 
   const weekStarts = eachWeekOfInterval({ start: from, end: to }, { weekStartsOn: 1 });
 
@@ -79,7 +86,7 @@ export async function GET(request: NextRequest) {
   return new NextResponse(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": "attachment; filename=payroll.csv"
+      "Content-Disposition": `attachment; filename=${membershipId ? `payroll-${membershipId}` : "payroll"}.csv`
     }
   });
 }

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 import { SignInButton } from "@/components/auth-buttons";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +25,9 @@ export default async function LoginPage() {
           <p className="text-xs text-muted-foreground">
             New users are provisioned automatically. First successful user becomes admin.
           </p>
+          <Link href="/auth/diagnostics" className="block text-xs font-medium text-primary hover:underline">
+            Check local auth diagnostics
+          </Link>
         </CardContent>
       </Card>
     </div>
