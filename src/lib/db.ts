@@ -14,9 +14,10 @@ const adapter = new PrismaPg(
 );
 
 function ensurePrismaCompilerWasm() {
-  const targetDir = "/node_modules/.prisma/client";
+  const targetDir = path.join(process.cwd(), "node_modules/.prisma/client");
   const targetFile = `${targetDir}/query_compiler_bg.wasm`;
-  if (existsSync(targetFile)) return;
+  const targetSchema = `${targetDir}/schema.prisma`;
+  if (existsSync(targetFile) && existsSync(targetSchema)) return;
 
   const candidates = [
     path.join(process.cwd(), "node_modules/.prisma/client/query_compiler_bg.wasm"),
@@ -26,13 +27,22 @@ function ensurePrismaCompilerWasm() {
     path.join(__dirname, "../../../../node_modules/.prisma/client/query_compiler_bg.wasm"),
     path.join(__dirname, "../../../../../node_modules/.prisma/client/query_compiler_bg.wasm")
   ];
+  const schemaCandidates = [
+    path.join(process.cwd(), "node_modules/.prisma/client/schema.prisma"),
+    path.join(process.cwd(), ".prisma/client/schema.prisma"),
+    path.join(__dirname, "../../../node_modules/.prisma/client/schema.prisma"),
+    path.join(__dirname, "../../../../node_modules/.prisma/client/schema.prisma"),
+    path.join(__dirname, "../../../../../node_modules/.prisma/client/schema.prisma")
+  ];
 
   const sourceFile = candidates.find((candidate) => existsSync(candidate));
-  if (!sourceFile) return;
+  const sourceSchema = schemaCandidates.find((candidate) => existsSync(candidate));
+  if (!sourceFile || !sourceSchema) return;
 
   try {
     mkdirSync(targetDir, { recursive: true });
     copyFileSync(sourceFile, targetFile);
+    copyFileSync(sourceSchema, targetSchema);
   } catch {
     // If runtime path is not writable, diagnostics endpoint will expose the ENOENT root cause.
   }
