@@ -31,6 +31,21 @@ export function getAuthDiagnostics(request?: NextRequest) {
   const appBaseUrl = getAppBaseUrl();
   const appBaseUrlFromEnv = cleanEnv(process.env.APP_BASE_URL);
   const requestBaseUrl = request ? getRequestBaseUrl(request) : null;
+  const databaseUrl = cleanEnv(process.env.DATABASE_URL);
+  const dbTarget = (() => {
+    if (!databaseUrl) return null;
+    try {
+      const parsed = new URL(databaseUrl);
+      return {
+        host: parsed.hostname || null,
+        port: parsed.port || null,
+        database: parsed.pathname?.replace(/^\/+/, "") || null,
+        sslmode: parsed.searchParams.get("sslmode")
+      };
+    } catch {
+      return { parseError: "invalid_database_url_format" };
+    }
+  })();
 
   return {
     ok: missing.length === 0,
@@ -43,7 +58,8 @@ export function getAuthDiagnostics(request?: NextRequest) {
         expectedGoogleRedirectUriFromEnv: `${appBaseUrl}/api/auth/google/callback`,
         expectedGoogleRedirectUriFromRequest: requestBaseUrl
           ? `${requestBaseUrl}/api/auth/google/callback`
-          : null
+          : null,
+        dbTarget
       },
       request: request
         ? {

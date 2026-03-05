@@ -40,6 +40,14 @@ export function classifyDatabaseError(error: unknown): DbErrorDetail {
   if (message.includes("can't reach database server") || message.includes("database not reachable")) {
     return "db_unreachable";
   }
+  if (
+    message.includes("proxy request failed") ||
+    message.includes("cannot connect to the specified address") ||
+    message.includes("connect econnrefused") ||
+    message.includes("connection terminated unexpectedly")
+  ) {
+    return "db_unreachable";
+  }
 
   if (message.includes("authentication failed") || message.includes("database access denied")) {
     return "db_auth_failed";
