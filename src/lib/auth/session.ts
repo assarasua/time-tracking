@@ -1,8 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import { Role } from "@prisma/client";
-
 import { db } from "@/lib/db";
+import type { Role } from "@/lib/db/schema";
 
 export const SESSION_COOKIE_NAME = "tt_session";
 export const OAUTH_STATE_COOKIE_NAME = "tt_oauth_state";

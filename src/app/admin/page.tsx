@@ -1,4 +1,3 @@
-import { Role } from "@prisma/client";
 import { addDays, endOfMonth, endOfWeek, format, formatISO, isWithinInterval, startOfMonth, startOfWeek } from "date-fns";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -7,6 +6,7 @@ import { AppNav } from "@/components/nav";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { Role } from "@/lib/db/schema";
 import { minutesBetween, weekStartFromParam } from "@/lib/time";
 
 type SearchParams = Promise<{ week_start?: string; month?: string }>;
@@ -106,7 +106,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
     }
   >();
 
-  members.forEach((member) => {
+  members.forEach((member: any) => {
     hoursByMember.set(member.id, {
       dailyMinutes: Array.from({ length: 7 }, () => 0),
       weeklyMinutes: 0,
@@ -114,7 +114,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
     });
   });
 
-  sessions.forEach((sessionItem) => {
+  sessions.forEach((sessionItem: any) => {
     if (!sessionItem.endAt) return;
 
     const minutes = minutesBetween(sessionItem.startAt, sessionItem.endAt);
@@ -181,7 +181,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
           <CardDescription>Active organization members and their roles.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {members.map((member) => (
+          {members.map((member: any) => (
             <div
               key={member.id}
               className="flex items-center justify-between gap-3 rounded-md border border-border bg-background p-3"
@@ -213,7 +213,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
         </CardHeader>
         <CardContent className="space-y-2">
           {locks.length === 0 ? <p className="text-sm text-muted-foreground">No locked weeks yet.</p> : null}
-          {locks.map((lock) => (
+          {locks.map((lock: any) => (
             <div
               key={lock.id}
               className="flex items-center justify-between rounded-md border border-border bg-background p-3 text-sm"
@@ -248,7 +248,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
                 </tr>
               </thead>
               <tbody>
-                {members.map((member) => {
+                {members.map((member: any) => {
                   const bucket = hoursByMember.get(member.id);
                   if (!bucket) return null;
 

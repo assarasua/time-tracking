@@ -31,14 +31,14 @@ export async function POST(request: NextRequest) {
 
   let remindersSent = 0;
 
-  for (const membership of memberships) {
-    const hasOpenSession = membership.timeSessions.some((session) => session.endAt === null);
+  for (const membership of memberships as any[]) {
+    const hasOpenSession = membership.timeSessions.some((session: any) => session.endAt === null);
 
     const { weekStart } = getWeekRange(new Date(), membership.organization.weekStartDay);
     const businessDays = getBusinessDaysInWeek(weekStart);
 
     const loggedDays = new Set(
-      membership.timeSessions.map((session) => formatISO(session.startAt, { representation: "date" }))
+      membership.timeSessions.map((session: any) => formatISO(session.startAt, { representation: "date" }))
     );
 
     const missingDayCount = businessDays.filter((day) => {

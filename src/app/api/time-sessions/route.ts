@@ -1,8 +1,8 @@
-import { Role } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 import { writeAuditLog } from "@/lib/audit";
 import { db } from "@/lib/db";
+import { Role } from "@/lib/db/schema";
 import { requireSession } from "@/lib/rbac";
 import { getWeekRange } from "@/lib/time";
 import { createSessionSchema } from "@/lib/validation";

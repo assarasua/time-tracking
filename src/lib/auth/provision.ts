@@ -1,11 +1,10 @@
-import { Prisma, Role } from "@prisma/client";
-
+import { Role } from "@/lib/db/schema";
 import { db } from "@/lib/db";
 import type { GoogleProfile } from "@/lib/auth/google";
 
 const FORCED_ADMIN_EMAILS = new Set(["h@hutech.ventures"]);
 
-async function getOrCreateDefaultOrganizationTx(tx: Prisma.TransactionClient) {
+async function getOrCreateDefaultOrganizationTx(tx: typeof db) {
   const existing = await tx.organization.findFirst({
     orderBy: {
       createdAt: "asc"
@@ -26,7 +25,7 @@ async function getOrCreateDefaultOrganizationTx(tx: Prisma.TransactionClient) {
 }
 
 export async function provisionUserFromGoogleProfile(profile: GoogleProfile) {
-  return db.$transaction(async (tx) => {
+  return db.$transaction(async (tx: typeof db) => {
     const organization = await getOrCreateDefaultOrganizationTx(tx);
     const normalizedEmail = profile.email.toLowerCase().trim();
 
@@ -45,13 +44,7 @@ export async function provisionUserFromGoogleProfile(profile: GoogleProfile) {
             avatarUrl: profile.picture
           }
         })
-        .catch(async (error) => {
-          const prismaError = error as { code?: string };
-          if (prismaError.code !== "P2002") {
-            throw error;
-          }
-
-          // Handle race/collision by reloading whichever unique key exists.
+        .catch(async () => {
           const bySub = await tx.user.findUnique({ where: { googleSub: profile.sub } });
           if (bySub) {
             return bySub;
@@ -60,16 +53,15 @@ export async function provisionUserFromGoogleProfile(profile: GoogleProfile) {
           if (byEmail) {
             return byEmail;
           }
-          throw error;
+          throw new Error("Failed to create or load user during provisioning");
         }));
 
-    const updateData: Prisma.UserUpdateInput = {
+    const updateData: Record<string, unknown> = {
       name: profile.name ?? user.name,
       avatarUrl: profile.picture ?? user.avatarUrl,
       status: "active"
     };
 
-    // Avoid unique collisions when legacy rows conflict on email/sub.
     if (!existingByEmail || existingByEmail.id === user.id) {
       updateData.email = normalizedEmail;
     }
@@ -110,12 +102,7 @@ export async function provisionUserFromGoogleProfile(profile: GoogleProfile) {
             active: true
           }
         });
-      } catch (error) {
-        // Handle race where another transaction creates membership first.
-        const prismaError = error as { code?: string };
-        if (prismaError.code !== "P2002") {
-          throw error;
-        }
+      } catch {
         membership = await tx.organizationUser.findUnique({
           where: {
             organizationId_userId: {

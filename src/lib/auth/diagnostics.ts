@@ -1,5 +1,4 @@
 import { NextRequest } from "next/server";
-import { Prisma } from "@prisma/client";
 
 import { getAppBaseUrl } from "@/lib/app-config";
 import { db } from "@/lib/db";
@@ -58,8 +57,7 @@ export function getAuthDiagnostics(request?: NextRequest) {
         nodeEnv: process.env.NODE_ENV ?? null,
         nodeVersion: process.version ?? null,
         cwd: process.cwd(),
-        prismaClientVersion: Prisma.prismaVersion.client,
-        prismaEngineType: "library"
+        dbRuntime: "kysely-pg"
       }
     }
   };

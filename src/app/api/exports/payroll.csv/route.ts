@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Role } from "@prisma/client";
 import { eachWeekOfInterval, formatISO, startOfWeek } from "date-fns";
 
 import { buildPayrollCsv } from "@/lib/csv";
 import { db } from "@/lib/db";
+import { Role } from "@/lib/db/schema";
 import { requireSession } from "@/lib/rbac";
 import { minutesBetween } from "@/lib/time";
 import { exportQuerySchema } from "@/lib/validation";
@@ -55,20 +55,23 @@ export async function GET(request: NextRequest) {
 
   const weekStarts = eachWeekOfInterval({ start: from, end: to }, { weekStartsOn: 1 });
 
-  const rows = memberships.flatMap((membership) =>
+  const rows = memberships.flatMap((membership: any) =>
     weekStarts.map((weekStart) => {
       const currentWeekStart = startOfWeek(weekStart, { weekStartsOn: 1 });
       const nextWeekStart = new Date(currentWeekStart);
       nextWeekStart.setDate(nextWeekStart.getDate() + 7);
 
       const weekSessions = membership.timeSessions.filter(
-        (session) =>
+        (session: any) =>
           session.startAt >= currentWeekStart &&
           session.startAt < nextWeekStart &&
           session.endAt !== null
       );
 
-      const workedMinutes = weekSessions.reduce((total, session) => total + minutesBetween(session.startAt, session.endAt!), 0);
+      const workedMinutes = weekSessions.reduce(
+        (total: number, session: any) => total + minutesBetween(session.startAt, session.endAt!),
+        0
+      );
 
       return {
         email: membership.user.email,

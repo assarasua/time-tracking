@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     }
   });
 
-  const workedMinutes = sessions.reduce((total, item) => {
+  const workedMinutes = (sessions as any[]).reduce((total: number, item: any) => {
     if (!item.endAt) return total;
     return total + minutesBetween(item.startAt, item.endAt);
   }, 0);
@@ -52,10 +52,10 @@ export async function GET(request: NextRequest) {
   const daily = Array.from({ length: 7 }, (_, index) => {
     const dayDate = startOfDay(addDays(weekStart, index));
     const nextDay = addDays(dayDate, 1);
-    const daySessions = sessions.filter((session) =>
+    const daySessions = (sessions as any[]).filter((session: any) =>
       session.startAt >= dayDate && session.startAt < nextDay
     );
-    const dayWorkedMinutes = daySessions.reduce((total, session) => {
+    const dayWorkedMinutes = daySessions.reduce((total: number, session: any) => {
       if (!session.endAt) return total;
       return total + minutesBetween(session.startAt, session.endAt);
     }, 0);

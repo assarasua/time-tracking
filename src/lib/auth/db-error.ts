@@ -17,10 +17,11 @@ export function classifyDatabaseError(error: unknown): DbErrorDetail {
   const code = typeof err?.code === "string" ? err.code.toUpperCase() : "";
   const name = String(err?.name ?? "");
 
-  if (code === "P2021") return "db_schema_missing";
-  if (code === "P1000") return "db_auth_failed";
-  if (code === "P1001") return "db_unreachable";
-  if (code === "P1011") return "db_ssl_error";
+  if (code === "P2021" || code === "42P01") return "db_schema_missing";
+  if (code === "P1000" || code === "28P01") return "db_auth_failed";
+  if (code === "P1001" || code === "ECONNREFUSED" || code === "ENOTFOUND" || code === "EHOSTUNREACH")
+    return "db_unreachable";
+  if (code === "P1011" || code === "SELF_SIGNED_CERT_IN_CHAIN") return "db_ssl_error";
   if (code === "ENOENT") return "db_engine_missing";
 
   if (

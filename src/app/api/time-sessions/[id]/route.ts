@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Role } from "@prisma/client";
 import { isWithinInterval } from "date-fns";
 
 import { writeAuditLog } from "@/lib/audit";
 import { db } from "@/lib/db";
+import { Role } from "@/lib/db/schema";
 import { requireSession } from "@/lib/rbac";
 import { getWeekRange } from "@/lib/time";
 import { editSessionSchema } from "@/lib/validation";

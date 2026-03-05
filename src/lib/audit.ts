@@ -1,14 +1,13 @@
-import { Prisma } from "@prisma/client";
-
 import { db } from "@/lib/db";
+import type { JsonValue } from "@/lib/db/schema";
 
 export async function writeAuditLog(params: {
   actorUserId?: string;
   entityType: string;
   entityId: string;
   action: string;
-  beforeJson?: Prisma.InputJsonValue | null;
-  afterJson?: Prisma.InputJsonValue | null;
+  beforeJson?: JsonValue | null;
+  afterJson?: JsonValue | null;
 }) {
   await db.auditLog.create({
     data: {

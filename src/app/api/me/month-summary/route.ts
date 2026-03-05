@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     }
   });
 
-  const workedMinutes = sessions.reduce((total, session) => {
+  const workedMinutes = (sessions as any[]).reduce((total: number, session: any) => {
     if (!session.endAt) return total;
     return total + minutesBetween(session.startAt, session.endAt);
   }, 0);
@@ -50,4 +50,3 @@ export async function GET(request: NextRequest) {
     workedMinutes
   });
 }
-

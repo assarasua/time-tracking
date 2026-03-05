@@ -1,8 +1,8 @@
-import { Role } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { Role, type Role as AppRole } from "@/lib/db/schema";
 
 export async function requireSession() {
   const session = await auth();
@@ -29,7 +29,7 @@ export async function requireSession() {
   return { session, membership };
 }
 
-export function ensureAdmin(role: Role) {
+export function ensureAdmin(role: AppRole) {
   if (role !== Role.admin) {
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
