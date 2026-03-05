@@ -12,7 +12,7 @@ import {
 import { getRequestBaseUrl, isRequestSecure } from "@/lib/request-url";
 
 function errorRedirect(request: NextRequest, errorCode: string) {
-  return NextResponse.redirect(new URL(`/auth/error?error=${errorCode}`, request.url));
+  return NextResponse.redirect(new URL(`/auth/error?error=${errorCode}`, getRequestBaseUrl(request)));
 }
 
 function classifyAuthError(error: unknown) {
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
       organizationId: membership.organizationId
     });
 
-    const response = NextResponse.redirect(new URL("/dashboard", request.url));
+    const response = NextResponse.redirect(new URL("/dashboard", getRequestBaseUrl(request)));
     response.cookies.set({
       name: SESSION_COOKIE_NAME,
       value: appSession.token,
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
       error
     });
     return NextResponse.redirect(
-      new URL(`/auth/error?error=${classified.code}&detail=${classified.detail}`, request.url)
+      new URL(`/auth/error?error=${classified.code}&detail=${classified.detail}`, getRequestBaseUrl(request))
     );
   }
 }

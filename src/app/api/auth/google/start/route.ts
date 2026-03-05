@@ -24,6 +24,8 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error) {
     console.error("auth.google.start.failed", { error });
-    return NextResponse.redirect(new URL("/auth/error?error=oauth_provider_misconfigured", request.url));
+    return NextResponse.redirect(
+      new URL("/auth/error?error=oauth_provider_misconfigured", getRequestBaseUrl(request))
+    );
   }
 }

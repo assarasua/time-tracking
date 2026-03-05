@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { isRequestSecure } from "@/lib/request-url";
+import { getRequestBaseUrl, isRequestSecure } from "@/lib/request-url";
 import { revokeAppSessionByToken, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
 async function logout(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   await revokeAppSessionByToken(token);
 
-  const response = NextResponse.redirect(new URL("/login", request.url));
+  const response = NextResponse.redirect(new URL("/login", getRequestBaseUrl(request)));
   response.cookies.set({
     name: SESSION_COOKIE_NAME,
     value: "",
