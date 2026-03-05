@@ -4,8 +4,8 @@ import "@/app/globals.css";
 import { PageTransition } from "@/components/page-transition";
 
 export const metadata: Metadata = {
-  title: "Time Tracking",
-  description: "Single-company time tracking MVP"
+  title: "Hutech Time Tracking",
+  description: "Track daily hours, review weekly totals, and close payroll faster."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
