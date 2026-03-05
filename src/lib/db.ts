@@ -7,6 +7,31 @@ import { Pool } from "pg";
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const connectionString =
   process.env.DATABASE_URL ?? "postgresql://placeholder:placeholder@localhost:5432/placeholder";
+
+function normalizePrismaRuntimeCwd() {
+  const rootCandidates = [
+    process.cwd(),
+    path.resolve(__dirname, "../../.."),
+    path.resolve(__dirname, "../../../.."),
+    path.resolve(__dirname, "../../../../.."),
+    path.resolve(__dirname, "../../../../../..")
+  ];
+
+  const validRoot = rootCandidates.find((candidate) =>
+    existsSync(path.join(candidate, "node_modules/.prisma/client/schema.prisma"))
+  );
+
+  if (validRoot && process.cwd() !== validRoot) {
+    try {
+      process.chdir(validRoot);
+    } catch {
+      // If cwd cannot be changed, diagnostics endpoint will still surface the path issue.
+    }
+  }
+}
+
+normalizePrismaRuntimeCwd();
+
 const adapter = new PrismaPg(
   new Pool({
     connectionString
