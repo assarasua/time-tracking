@@ -65,6 +65,9 @@ function classifyDbError(error: unknown) {
   const prismaCode = typeof err?.code === "string" ? err.code : null;
 
   if (err?.name?.includes("PrismaClientInitializationError")) {
+    if (prismaCode === "ENOENT") {
+      return "db_bundle_missing";
+    }
     if (
       message.includes("could not locate the query engine") ||
       message.includes("libquery_engine")

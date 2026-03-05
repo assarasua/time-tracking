@@ -30,6 +30,9 @@ function classifyAuthError(error: unknown) {
     return { code: "profile_missing_email", detail: "google_profile_invalid" };
   }
   if (err?.name?.includes("PrismaClientInitializationError")) {
+    if (prismaCode === "ENOENT") {
+      return { code: "session_create_failed", detail: "db_bundle_missing" };
+    }
     if (
       normalizedMessage.includes("could not locate the query engine") ||
       normalizedMessage.includes("libquery_engine")
