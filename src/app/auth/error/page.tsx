@@ -20,7 +20,7 @@ const errorCopy: Record<string, { title: string; description: string }> = {
   session_create_failed: {
     title: "Session Creation Failed",
     description:
-      "Your Google account was authenticated, but app session creation failed. Please retry or share the detail code with support."
+      "Your Google account was authenticated, but app session creation failed."
   },
   provisioning_failed: {
     title: "Account Provisioning Failed",
@@ -36,11 +36,23 @@ const errorCopy: Record<string, { title: string; description: string }> = {
   }
 };
 
+const detailCopy: Record<string, string> = {
+  db_env_missing: "DATABASE_URL is missing in runtime environment variables.",
+  db_unreachable: "The app cannot reach the database host/port from runtime.",
+  db_auth_failed: "Database credentials are invalid or database access was denied.",
+  db_ssl_error: "TLS/SSL negotiation with PostgreSQL failed. Validate SSL mode and certificates.",
+  db_schema_missing: "Expected tables are missing. Run `prisma migrate deploy` in production.",
+  db_engine_missing: "Prisma runtime artifacts are missing in deploy output. Clear build cache and redeploy.",
+  db_runtime_unsupported: "Current runtime is incompatible with Prisma database engine execution.",
+  db_unknown: "Unexpected database initialization error. Review server logs for exact stack trace."
+};
+
 export default async function AuthErrorPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const errorKey = params.error ?? "default";
   const detail = params.detail;
   const copy = errorCopy[errorKey] ?? errorCopy.default;
+  const detailHint = detail ? detailCopy[detail] : null;
 
   return (
     <div className="flex min-h-[70vh] items-center justify-center">
@@ -59,6 +71,11 @@ export default async function AuthErrorPage({ searchParams }: { searchParams: Se
               </>
             ) : null}
           </div>
+          {detailHint ? (
+            <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground">
+              {detailHint}
+            </div>
+          ) : null}
           <div className="flex flex-wrap gap-3">
             <Link
               href="/login"

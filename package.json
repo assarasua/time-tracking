@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "prisma generate && next start",
+    "start": "next start",
     "postinstall": "prisma generate",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
@@ -15,12 +15,10 @@
     "prisma:seed": "node prisma/seed.mjs"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^6.19.2",
     "@prisma/client": "^6.19.2",
     "csv-stringify": "^6.5.2",
     "date-fns": "^4.1.0",
     "next": "^15.2.2",
-    "pg": "^8.13.3",
     "prisma": "^6.19.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

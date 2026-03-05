@@ -1,7 +1,9 @@
 import { NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 
 import { getAppBaseUrl } from "@/lib/app-config";
 import { db } from "@/lib/db";
+import { classifyDatabaseError } from "@/lib/auth/db-error";
 import { cleanEnv } from "@/lib/env-utils";
 import { getRequestBaseUrl } from "@/lib/request-url";
 
@@ -53,45 +55,14 @@ export function getAuthDiagnostics(request?: NextRequest) {
           }
         : null,
       runtime: {
-        nodeEnv: process.env.NODE_ENV ?? null
+        nodeEnv: process.env.NODE_ENV ?? null,
+        nodeVersion: process.version ?? null,
+        cwd: process.cwd(),
+        prismaClientVersion: Prisma.prismaVersion.client,
+        prismaEngineType: "library"
       }
     }
   };
-}
-
-function classifyDbError(error: unknown) {
-  const err = error as { message?: string; name?: string; code?: string };
-  const message = String(err?.message ?? "").toLowerCase();
-  const prismaCode = typeof err?.code === "string" ? err.code : null;
-
-  if (err?.name?.includes("PrismaClientInitializationError")) {
-    if (prismaCode === "ENOENT") {
-      return "db_bundle_missing";
-    }
-    if (
-      message.includes("could not locate the query engine") ||
-      message.includes("libquery_engine")
-    ) {
-      return "db_engine_missing";
-    }
-    if (message.includes("unable to run in this browser environment") || message.includes("edge runtime")) {
-      return "db_runtime_unsupported";
-    }
-    if (message.includes("can't reach database server")) {
-      return "db_unreachable";
-    }
-    if (message.includes("authentication failed")) {
-      return "db_auth_failed";
-    }
-    if (message.includes("ssl")) {
-      return "db_ssl_error";
-    }
-    return "db_initialization_failed";
-  }
-
-  if (prismaCode === "P2021") return "db_schema_missing";
-  if (prismaCode) return `prisma_${prismaCode.toLowerCase()}`;
-  return "db_unknown";
 }
 
 export async function getDatabaseDiagnostics() {
@@ -116,9 +87,9 @@ export async function getDatabaseDiagnostics() {
     return {
       ok: false,
       skipped: false,
-      detail: classifyDbError(error),
+      detail: classifyDatabaseError(error),
       errorName: err?.name ?? "UnknownError",
-      message: String(err?.message ?? "").slice(0, 240)
+      message: String(err?.message ?? "").slice(0, 1000)
     };
   }
 }
