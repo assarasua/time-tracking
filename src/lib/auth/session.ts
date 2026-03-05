@@ -12,6 +12,7 @@ export type AppSession = {
     id: string;
     email: string;
     name: string | null;
+    avatarUrl: string | null;
     role: Role;
     organizationId: string;
   };
@@ -92,6 +93,7 @@ export async function getAppSessionFromToken(token: string | null | undefined): 
       id: record.user.id,
       email: record.user.email,
       name: record.user.name,
+      avatarUrl: record.user.avatarUrl,
       role: membership.role,
       organizationId: record.organizationId
     },

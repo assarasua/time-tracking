@@ -23,7 +23,7 @@ export default async function TimesheetPage({ searchParams }: { searchParams: Se
 
   return (
     <div className="space-y-5">
-      <AppNav role={session.user.role} />
+      <AppNav role={session.user.role} user={session.user} />
       <TimesheetBoard role={session.user.role} initialFrom={initialFrom} initialTo={initialTo} />
     </div>
   );

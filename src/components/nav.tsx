@@ -13,13 +13,29 @@ type TabItem = {
   href: Route;
 };
 
-export function AppNav({ role }: { role: AppRole }) {
+type NavUser = {
+  name: string | null;
+  email: string;
+  avatarUrl?: string | null;
+};
+
+function getInitials(name: string | null, email: string) {
+  const source = (name?.trim() || email).replace(/\s+/g, " ");
+  const parts = source.split(" ").filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+  }
+  return (parts[0]?.slice(0, 2) || "U").toUpperCase();
+}
+
+export function AppNav({ role, user }: { role: AppRole; user: NavUser }) {
   const pathname = usePathname();
   const tabs: TabItem[] = [
     { label: "Dashboard", href: "/dashboard" as Route },
     { label: "Timesheet", href: "/timesheet" as Route },
     ...(role === "admin" ? [{ label: "Admin", href: "/admin" as Route }] : [])
   ];
+  const initials = getInitials(user.name, user.email);
 
   return (
     <div className="sticky top-2 z-40">
@@ -50,14 +66,30 @@ export function AppNav({ role }: { role: AppRole }) {
               </div>
             </div>
           </div>
-          <form method="post" action="/api/auth/logout" className="flex justify-end border-t border-border/70 pt-2">
-            <button
-              type="submit"
-              className="inline-flex h-8 items-center text-sm font-semibold text-destructive transition-colors hover:text-destructive/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
-            >
-              Sign out
-            </button>
-          </form>
+          <div className="flex items-center justify-between border-t border-border/70 pt-2">
+            <div className="flex min-w-0 items-center gap-2">
+              {user.avatarUrl ? (
+                <img
+                  src={user.avatarUrl}
+                  alt={`${user.name ?? user.email} avatar`}
+                  className="size-8 rounded-full border border-border object-cover"
+                />
+              ) : (
+                <span className="inline-flex size-8 items-center justify-center rounded-full border border-border bg-muted text-xs font-semibold text-foreground">
+                  {initials}
+                </span>
+              )}
+              <span className="truncate text-sm font-medium text-foreground">{user.name ?? user.email}</span>
+            </div>
+            <form method="post" action="/api/auth/logout" className="shrink-0">
+              <button
+                type="submit"
+                className="inline-flex h-8 items-center text-sm font-semibold text-destructive transition-colors hover:text-destructive/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
         </div>
 
         <div className="relative hidden min-h-[44px] items-center justify-center sm:flex">
@@ -85,14 +117,30 @@ export function AppNav({ role }: { role: AppRole }) {
             </div>
           </div>
 
-          <form method="post" action="/api/auth/logout" className="absolute right-0 top-1/2 -translate-y-1/2">
-            <button
-              type="submit"
-              className="inline-flex h-8 items-center text-sm font-semibold text-destructive transition-colors hover:text-destructive/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
-            >
-              Sign out
-            </button>
-          </form>
+          <div className="absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-3">
+            <div className="flex max-w-[220px] items-center gap-2">
+              {user.avatarUrl ? (
+                <img
+                  src={user.avatarUrl}
+                  alt={`${user.name ?? user.email} avatar`}
+                  className="size-8 rounded-full border border-border object-cover"
+                />
+              ) : (
+                <span className="inline-flex size-8 items-center justify-center rounded-full border border-border bg-muted text-xs font-semibold text-foreground">
+                  {initials}
+                </span>
+              )}
+              <span className="truncate text-sm font-medium text-foreground">{user.name ?? user.email}</span>
+            </div>
+            <form method="post" action="/api/auth/logout">
+              <button
+                type="submit"
+                className="inline-flex h-8 items-center text-sm font-semibold text-destructive transition-colors hover:text-destructive/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>

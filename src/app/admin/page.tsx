@@ -78,7 +78,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
 
   return (
     <div className="space-y-5">
-      <AppNav role={session.user.role} />
+      <AppNav role={session.user.role} user={session.user} />
 
       <Card>
         <CardHeader>

@@ -25,7 +25,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
   const selectedTo = selected.to;
   return (
     <div className="space-y-4 sm:space-y-5">
-      <AppNav role={session.user.role} />
+      <AppNav role={session.user.role} user={session.user} />
       <Card className="border-primary/20 bg-card/95 shadow-sm">
         <CardHeader className="space-y-2 pb-3 sm:pb-4">
           <CardTitle className="text-xl sm:text-2xl">Welcome, {session.user.name ?? session.user.email}</CardTitle>
