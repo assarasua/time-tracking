@@ -18,7 +18,6 @@ function errorRedirect(request: NextRequest, errorCode: string) {
 function classifyAuthError(error: unknown) {
   const err = error as { message?: string; code?: string; name?: string };
   const message = String(err?.message ?? "");
-  const prismaCode = typeof err?.code === "string" ? err.code : undefined;
 
   if (message.includes("Google token exchange failed")) {
     return { code: "oauth_exchange_failed", detail: "google_token_exchange_failed" };
@@ -30,14 +29,9 @@ function classifyAuthError(error: unknown) {
     return { code: "profile_missing_email", detail: "google_profile_invalid" };
   }
 
-  const isLikelyDatabaseError =
-    Boolean(prismaCode) ||
-    String(err?.name ?? "").includes("Prisma") ||
-    message.toLowerCase().includes("database") ||
-    message.toLowerCase().includes("query engine");
-
-  if (isLikelyDatabaseError) {
-    return { code: "session_create_failed", detail: classifyDatabaseError(error) };
+  const dbDetail = classifyDatabaseError(error);
+  if (dbDetail !== "db_unknown") {
+    return { code: "session_create_failed", detail: dbDetail };
   }
 
   return { code: "session_create_failed", detail: "unknown" };
