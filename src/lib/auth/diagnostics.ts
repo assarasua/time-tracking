@@ -9,7 +9,8 @@ import { getRequestBaseUrl } from "@/lib/request-url";
 const REQUIRED_AUTH_ENV_VARS = [
   "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
-  "AUTH_SECRET"
+  "AUTH_SECRET",
+  "DATABASE_URL"
 ] as const;
 
 export function getAuthDiagnostics(request?: NextRequest) {
@@ -30,10 +31,7 @@ export function getAuthDiagnostics(request?: NextRequest) {
   const appBaseUrl = getAppBaseUrl();
   const appBaseUrlFromEnv = cleanEnv(process.env.APP_BASE_URL);
   const requestBaseUrl = request ? getRequestBaseUrl(request) : null;
-  const databasePrivateUrl = cleanEnv(process.env.DATABASE_PRIVATE_URL);
-  const databasePublicUrl = cleanEnv(process.env.DATABASE_URL);
-  const databaseUrl = databasePrivateUrl || databasePublicUrl;
-  const dbUrlSource = databasePrivateUrl ? "DATABASE_PRIVATE_URL" : databasePublicUrl ? "DATABASE_URL" : null;
+  const databaseUrl = cleanEnv(process.env.DATABASE_URL);
   const dbTarget = (() => {
     if (!databaseUrl) return null;
     try {
@@ -61,7 +59,6 @@ export function getAuthDiagnostics(request?: NextRequest) {
         expectedGoogleRedirectUriFromRequest: requestBaseUrl
           ? `${requestBaseUrl}/api/auth/google/callback`
           : null,
-        dbUrlSource,
         dbTarget
       },
       request: request
@@ -83,7 +80,7 @@ export function getAuthDiagnostics(request?: NextRequest) {
 }
 
 export async function getDatabaseDiagnostics() {
-  const databaseUrl = cleanEnv(process.env.DATABASE_PRIVATE_URL) || cleanEnv(process.env.DATABASE_URL);
+  const databaseUrl = cleanEnv(process.env.DATABASE_URL);
   if (!databaseUrl) {
     return {
       ok: false,

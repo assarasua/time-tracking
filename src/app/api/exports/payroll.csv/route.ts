@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eachWeekOfInterval, formatISO, startOfWeek } from "date-fns";
+import { eachDayOfInterval, eachMonthOfInterval, format, startOfMonth, endOfMonth } from "date-fns";
 
 import { buildPayrollCsv } from "@/lib/csv";
 import { db } from "@/lib/db";
@@ -7,6 +7,14 @@ import { Role } from "@/lib/db/schema";
 import { requireSession } from "@/lib/rbac";
 import { minutesBetween } from "@/lib/time";
 import { exportQuerySchema } from "@/lib/validation";
+
+function sanitizeFilePart(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 export async function GET(request: NextRequest) {
   const authResult = await requireSession();
@@ -27,7 +35,8 @@ export async function GET(request: NextRequest) {
   }
 
   const from = new Date(`${query.data.from}T00:00:00.000Z`);
-  const to = new Date(`${query.data.to}T23:59:59.999Z`);
+  const toRaw = new Date(`${query.data.to}T23:59:59.999Z`);
+  const to = toRaw < from ? from : toRaw;
   const membershipId = query.data.membership_id;
 
   const memberships = await db.organizationUser.findMany({
@@ -53,43 +62,54 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Membership not found in this organization" }, { status: 404 });
   }
 
-  const weekStarts = eachWeekOfInterval({ start: from, end: to }, { weekStartsOn: 1 });
+  const months = eachMonthOfInterval({ start: from, end: to });
 
   const rows = memberships.flatMap((membership: any) =>
-    weekStarts.map((weekStart) => {
-      const currentWeekStart = startOfWeek(weekStart, { weekStartsOn: 1 });
-      const nextWeekStart = new Date(currentWeekStart);
-      nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+    months.map((monthStartDate) => {
+      const monthStart = startOfMonth(monthStartDate);
+      const monthEnd = endOfMonth(monthStartDate);
+      const effectiveStart = monthStart > from ? monthStart : from;
+      const effectiveEnd = monthEnd < to ? monthEnd : to;
 
-      const weekSessions = membership.timeSessions.filter(
+      const monthSessions = membership.timeSessions.filter(
         (session: any) =>
-          session.startAt >= currentWeekStart &&
-          session.startAt < nextWeekStart &&
+          session.startAt >= effectiveStart &&
+          session.startAt <= effectiveEnd &&
           session.endAt !== null
       );
 
-      const workedMinutes = weekSessions.reduce(
+      const workedMinutes = monthSessions.reduce(
         (total: number, session: any) => total + minutesBetween(session.startAt, session.endAt!),
         0
       );
+      const businessDays = eachDayOfInterval({ start: effectiveStart, end: effectiveEnd }).filter((day) => {
+        const dow = day.getUTCDay();
+        return dow >= 1 && dow <= 5;
+      }).length;
+      const expectedPerBusinessDay = Math.round(membership.weeklyTargetMinute / 5);
+      const expectedMinutes = expectedPerBusinessDay * businessDays;
 
       return {
         email: membership.user.email,
         name: membership.user.name ?? "",
-        weekStart: formatISO(currentWeekStart, { representation: "date" }),
+        month: format(monthStart, "yyyy-MM"),
         workedMinutes,
-        expectedMinutes: membership.weeklyTargetMinute,
-        varianceMinutes: workedMinutes - membership.weeklyTargetMinute
+        expectedMinutes,
+        varianceMinutes: workedMinutes - expectedMinutes
       };
     })
   );
 
   const csv = buildPayrollCsv(rows);
+  const rangePart = `${query.data.from}-to-${query.data.to}`;
+  const filename = membershipId
+    ? `${sanitizeFilePart(memberships[0]?.user?.name || memberships[0]?.user?.email || "employee")}-${rangePart}.csv`
+    : `hutech-${rangePart}-monthly.csv`;
 
   return new NextResponse(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename=${membershipId ? `payroll-${membershipId}` : "payroll"}.csv`
+      "Content-Disposition": `attachment; filename=${filename}`
     }
   });
 }

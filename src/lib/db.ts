@@ -358,6 +358,10 @@ function createDb(executor: Executor): any {
             .returningAll()
             .executeTakeFirstOrThrow()
         );
+      },
+
+      async delete(args: { where: { id: string } }) {
+        await executor.deleteFrom("TimeSession").where("id", "=", args.where.id).executeTakeFirst();
       }
     },
 

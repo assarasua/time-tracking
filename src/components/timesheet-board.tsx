@@ -1,11 +1,12 @@
 "use client";
 
-import { addWeeks, format, parseISO } from "date-fns";
+import { addDays, addWeeks, endOfWeek, format, parseISO, startOfWeek } from "date-fns";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
+import { DateRangePresetHeader } from "@/components/date-range-preset-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { detectSelectionMode, getModeLabel } from "@/lib/date-range";
 
 type UserRole = "admin" | "employee";
 
@@ -20,11 +21,22 @@ type DailySummary = {
   date: string;
   workedMinutes: number;
   sessions: Session[];
+  weekLocked?: boolean;
 };
 
-type WeekSummary = {
+type WeekSummaryResponse = {
   weekStart: string;
   weekEnd: string;
+  workedMinutes: number;
+  expectedMinutes: number;
+  varianceMinutes: number;
+  weekLocked: boolean;
+  daily: DailySummary[];
+};
+
+type RangeSummary = {
+  from: string;
+  to: string;
   workedMinutes: number;
   expectedMinutes: number;
   varianceMinutes: number;
@@ -40,6 +52,46 @@ function formatMinutes(minutes: number) {
   return `${sign}${hours}h ${mins}m`;
 }
 
+const californiaTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Los_Angeles",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false
+});
+
+function formatCaliforniaTime(value: string) {
+  return californiaTimeFormatter.format(parseISO(value));
+}
+
+const TIME_OPTIONS = Array.from({ length: 96 }, (_, index) => {
+  const hour = Math.floor(index / 4);
+  const minute = (index % 4) * 15;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+});
+
+function buildUtcDate(date: string, time: string) {
+  const [yearStr, monthStr, dayStr] = date.split("-");
+  const [hourStr, minuteStr] = time.split(":");
+
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+  const hour = Number(hourStr);
+  const minute = Number(minuteStr);
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute)
+  ) {
+    return new Date(NaN);
+  }
+
+  return new Date(Date.UTC(year, month - 1, day, hour, minute, 0, 0));
+}
+
 function asApiErrorMessage(payload: unknown, fallback: string) {
   if (!payload || typeof payload !== "object") return fallback;
   const maybeError = (payload as { error?: unknown }).error;
@@ -47,9 +99,12 @@ function asApiErrorMessage(payload: unknown, fallback: string) {
   return fallback;
 }
 
-function isCurrentWeek(weekStart: string, weekEnd: string) {
+function isCurrentWeekByDate(dateStr: string) {
   const now = new Date();
-  return now >= parseISO(weekStart) && now <= parseISO(weekEnd);
+  const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+  const target = parseISO(dateStr);
+  return target >= weekStart && target <= weekEnd;
 }
 
 function AddHoursInlineForm({
@@ -76,8 +131,8 @@ function AddHoursInlineForm({
       return;
     }
 
-    const startAt = new Date(`${date}T${startTime}:00`);
-    const endAt = new Date(`${date}T${endTime}:00`);
+    const startAt = buildUtcDate(date, startTime);
+    const endAt = buildUtcDate(date, endTime);
     if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
       setError("Invalid date/time.");
       return;
@@ -124,22 +179,36 @@ function AddHoursInlineForm({
       <div className="grid gap-3 md:grid-cols-2">
         <label className="space-y-1 text-sm">
           <span className="font-medium text-foreground">Start time</span>
-          <Input
-            type="time"
+          <select
             value={startTime}
             onChange={(event) => setStartTime(event.target.value)}
             aria-describedby={error ? `row-error-${date}` : undefined}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             autoFocus
-          />
+          >
+            <option value="">Select start</option>
+            {TIME_OPTIONS.map((timeValue) => (
+              <option key={`start-${timeValue}`} value={timeValue}>
+                {timeValue}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="space-y-1 text-sm">
           <span className="font-medium text-foreground">End time</span>
-          <Input
-            type="time"
+          <select
             value={endTime}
             onChange={(event) => setEndTime(event.target.value)}
             aria-describedby={error ? `row-error-${date}` : undefined}
-          />
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <option value="">Select end</option>
+            {TIME_OPTIONS.map((timeValue) => (
+              <option key={`end-${timeValue}`} value={timeValue}>
+                {timeValue}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
       {error ? (
@@ -170,16 +239,12 @@ function AddHoursInlineForm({
 function TimesheetDayRow({
   role,
   item,
-  weekLocked,
-  isEditableWeek,
   isToday,
   targetMinutes,
   onSaved
 }: {
   role: UserRole;
   item: DailySummary;
-  weekLocked: boolean;
-  isEditableWeek: boolean;
   isToday: boolean;
   targetMinutes: number;
   onSaved: () => Promise<void>;
@@ -188,12 +253,12 @@ function TimesheetDayRow({
   const [showForm, setShowForm] = useState(false);
   const addButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const canEdit = role === "admin" || (isEditableWeek && !weekLocked);
+  const canEdit = role === "admin" || (isCurrentWeekByDate(item.date) && !item.weekLocked);
   const dayDate = parseISO(item.date);
   const dayLabel = format(dayDate, "EEE, MMM d");
 
   let statusLabel = "No hours";
-  if (weekLocked && role !== "admin") {
+  if (item.weekLocked && role !== "admin") {
     statusLabel = "Locked";
   } else if (item.workedMinutes > 0) {
     statusLabel = item.workedMinutes >= targetMinutes ? "Complete" : "Partial";
@@ -259,15 +324,14 @@ function TimesheetDayRow({
           />
         </div>
       ) : null}
-
       {showSessions ? (
         <div id={`day-sessions-${item.date}`} className="space-y-2">
           {item.sessions.length === 0 ? <p className="text-sm text-muted-foreground">No sessions for this day.</p> : null}
           {item.sessions.map((session) => (
             <div key={session.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm">
-              <span>{format(parseISO(session.startAt), "HH:mm")}</span>
+              <span>{formatCaliforniaTime(session.startAt)}</span>
               <span className="text-muted-foreground">
-                {session.endAt ? format(parseISO(session.endAt), "HH:mm") : "Active"}
+                {session.endAt ? formatCaliforniaTime(session.endAt) : "Active"}
               </span>
             </div>
           ))}
@@ -277,77 +341,130 @@ function TimesheetDayRow({
   );
 }
 
-export function TimesheetBoard({ role, initialWeekStart }: { role: UserRole; initialWeekStart: string }) {
-  const [selectedWeekStart, setSelectedWeekStart] = useState(initialWeekStart);
-  const [summary, setSummary] = useState<WeekSummary | null>(null);
-  const [status, setStatus] = useState("Loading timesheet...");
+export function TimesheetBoard({
+  role,
+  initialFrom,
+  initialTo
+}: {
+  role: UserRole;
+  initialFrom: string;
+  initialTo: string;
+}) {
+  const [selectedFrom, setSelectedFrom] = useState(initialFrom);
+  const [selectedTo, setSelectedTo] = useState(initialTo);
+  const [summary, setSummary] = useState<RangeSummary | null>(null);
+  const [status, setStatus] = useState("Loading range...");
   const [isLoading, setIsLoading] = useState(true);
   const [announce, setAnnounce] = useState("");
 
-  async function loadWeek(weekStart: string) {
+  async function loadRange(from: string, to: string) {
+    const fromDate = parseISO(from);
+    const toDate = parseISO(to);
+    const normalizedToDate = toDate < fromDate ? fromDate : toDate;
+
+    const weekStarts: string[] = [];
+    let cursor = startOfWeek(fromDate, { weekStartsOn: 1 });
+    const endWeek = startOfWeek(normalizedToDate, { weekStartsOn: 1 });
+    while (cursor <= endWeek) {
+      weekStarts.push(format(cursor, "yyyy-MM-dd"));
+      cursor = addWeeks(cursor, 1);
+    }
+
     setIsLoading(true);
-    setStatus("Loading timesheet...");
-    const response = await fetch(`/api/me/week-summary?week_start=${weekStart}`);
-    if (!response.ok) {
-      setStatus("Unable to load this week.");
+    setStatus("Loading range...");
+
+    const results = await Promise.all(
+      weekStarts.map(async (weekStart) => {
+        const response = await fetch(`/api/me/week-summary?week_start=${weekStart}`);
+        if (!response.ok) return null;
+        return (await response.json()) as WeekSummaryResponse;
+      })
+    );
+
+    const validResults = results.filter((item): item is WeekSummaryResponse => Boolean(item));
+    if (validResults.length === 0) {
+      setStatus("Unable to load selected range.");
       setIsLoading(false);
       return;
     }
 
-    const data = (await response.json()) as WeekSummary;
-    setSummary(data);
+    const fromKey = format(fromDate, "yyyy-MM-dd");
+    const toKey = format(normalizedToDate, "yyyy-MM-dd");
+
+    let workedMinutes = 0;
+    let expectedMinutes = 0;
+    let anyLockedWeek = false;
+
+    const daily = validResults
+      .flatMap((week) => {
+        anyLockedWeek = anyLockedWeek || week.weekLocked;
+        const expectedPerBusinessDay = Math.round(week.expectedMinutes / 5);
+
+        return week.daily
+          .filter((day) => day.date >= fromKey && day.date <= toKey)
+          .map((day) => {
+            const businessDay = (() => {
+              const dow = parseISO(day.date).getUTCDay();
+              return dow >= 1 && dow <= 5;
+            })();
+            if (businessDay) {
+              expectedMinutes += expectedPerBusinessDay;
+            }
+            workedMinutes += day.workedMinutes;
+            return {
+              ...day,
+              weekLocked: week.weekLocked
+            };
+          });
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    setSummary({
+      from: fromKey,
+      to: toKey,
+      workedMinutes,
+      expectedMinutes,
+      varianceMinutes: workedMinutes - expectedMinutes,
+      weekLocked: anyLockedWeek,
+      daily
+    });
     setStatus("Ready");
     setIsLoading(false);
   }
 
   useEffect(() => {
-    void loadWeek(selectedWeekStart);
-  }, [selectedWeekStart]);
+    void loadRange(selectedFrom, selectedTo);
+  }, [selectedFrom, selectedTo]);
 
   const dayTargetMinutes = useMemo(() => {
     if (!summary) return 0;
     return Math.round(summary.expectedMinutes / 5);
   }, [summary]);
 
-  const editableWeek = useMemo(() => {
-    if (!summary) return false;
-    return isCurrentWeek(summary.weekStart, summary.weekEnd);
-  }, [summary]);
-
-  function moveWeek(direction: "prev" | "next" | "current") {
-    if (direction === "current") {
-      const today = format(new Date(), "yyyy-MM-dd");
-      setSelectedWeekStart(today);
-      return;
-    }
-
-    const baseDate = parseISO(selectedWeekStart);
-    const nextDate = direction === "prev" ? addWeeks(baseDate, -1) : addWeeks(baseDate, 1);
-    setSelectedWeekStart(format(nextDate, "yyyy-MM-dd"));
-  }
+  const selectionLabel = useMemo(() => {
+    return getModeLabel(detectSelectionMode(selectedFrom, selectedTo, 1));
+  }, [selectedFrom, selectedTo]);
 
   return (
     <Card className="border-primary/20 bg-card/95 shadow-sm">
       <CardHeader className="space-y-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <CardTitle>Timesheet</CardTitle>
-            <CardDescription>Review daily hours, weekly totals, and add manual entries.</CardDescription>
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <Button variant="ghost" onClick={() => moveWeek("prev")} className="w-full">
-              Previous week
-            </Button>
-            <Button variant="ghost" onClick={() => moveWeek("current")} className="w-full">
-              Current week
-            </Button>
-            <Button variant="ghost" onClick={() => moveWeek("next")} className="w-full">
-              Next week
-            </Button>
+            <CardTitle className="text-xl sm:text-2xl">Timesheet</CardTitle>
+            <CardDescription>Review daily hours, selected-range totals, and add manual entries.</CardDescription>
           </div>
         </div>
+        <DateRangePresetHeader
+          initialFrom={selectedFrom}
+          initialTo={selectedTo}
+          weekStartsOn={1}
+          onApply={({ from, to }) => {
+            setSelectedFrom(from);
+            setSelectedTo(to);
+          }}
+        />
 
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           <div className="rounded-md border border-border bg-background p-3">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Worked</p>
             <p className="mt-1 text-lg font-semibold">{formatMinutes(summary?.workedMinutes ?? 0)}</p>
@@ -368,6 +485,10 @@ export function TimesheetBoard({ role, initialWeekStart }: { role: UserRole; ini
           </div>
         </div>
         <div className="rounded-md bg-accent/40 px-3 py-2 text-sm text-accent-foreground">{status}</div>
+        <div className="rounded-md border border-border bg-background px-3 py-2 text-sm">
+          <span className="font-semibold text-foreground">Selection:</span>{" "}
+          <span className="text-muted-foreground">{selectionLabel}</span>
+        </div>
       </CardHeader>
 
       <CardContent className="space-y-3">
@@ -375,24 +496,30 @@ export function TimesheetBoard({ role, initialWeekStart }: { role: UserRole; ini
           {announce}
         </p>
         {!isLoading && summary?.daily?.length ? (
-          summary.daily.map((item) => (
-            <TimesheetDayRow
-              key={item.date}
-              role={role}
-              item={item}
-              weekLocked={summary.weekLocked}
-              isEditableWeek={editableWeek}
-              isToday={item.date === format(new Date(), "yyyy-MM-dd")}
-              targetMinutes={dayTargetMinutes}
-              onSaved={async () => {
-                await loadWeek(selectedWeekStart);
-                setAnnounce(`Hours saved for ${item.date}.`);
-              }}
-            />
-          ))
+          <div className="max-h-[68vh] space-y-3 overflow-y-auto pr-1">
+            <div className="sticky top-0 z-10 rounded-md border border-border bg-card/95 px-3 py-2 text-sm backdrop-blur">
+              <span className="font-semibold text-foreground">{selectionLabel}</span>
+              <span className="ml-2 text-muted-foreground">
+                ({selectedFrom} to {selectedTo})
+              </span>
+            </div>
+            {summary.daily.map((item) => (
+              <TimesheetDayRow
+                key={item.date}
+                role={role}
+                item={item}
+                isToday={item.date === format(new Date(), "yyyy-MM-dd")}
+                targetMinutes={dayTargetMinutes}
+                onSaved={async () => {
+                  await loadRange(selectedFrom, selectedTo);
+                  setAnnounce(`Hours saved for ${item.date}.`);
+                }}
+              />
+            ))}
+          </div>
         ) : (
           <div className="rounded-md border border-border bg-background p-3 text-sm text-muted-foreground">
-            No day data available for this week.
+            No day data available for the selected range.
           </div>
         )}
       </CardContent>

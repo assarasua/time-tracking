@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { writeAuditLog } from "@/lib/audit";
 import { db } from "@/lib/db";
+import type { DbClient } from "@/lib/db";
 import { Role } from "@/lib/db/schema";
 import { requireSession } from "@/lib/rbac";
 import { getWeekRange } from "@/lib/time";
@@ -45,51 +45,100 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const overlap = await db.timeSession.findFirst({
-    where: {
-      organizationUserId: authResult.membership.id,
-      startAt: {
-        lt: payload.data.endAt
+  const result = await db.$transaction(async (tx: DbClient) => {
+    const candidates = await tx.timeSession.findMany({
+      where: {
+        organizationUserId: authResult.membership.id,
+        startAt: {
+          lte: payload.data.endAt
+        }
       },
-      OR: [{ endAt: null }, { endAt: { gt: payload.data.startAt } }]
-    },
-    select: {
-      id: true
-    }
-  });
+      orderBy: {
+        startAt: "asc"
+      }
+    });
 
-  if (overlap) {
-    return NextResponse.json({ error: "Session overlaps existing entry" }, { status: 409 });
-  }
+    const overlaps = candidates.filter(
+      (sessionItem: any) =>
+        sessionItem.startAt < payload.data.endAt &&
+        (sessionItem.endAt === null || sessionItem.endAt > payload.data.startAt)
+    );
 
-  const created = await db.timeSession.create({
-    data: {
-      organizationUserId: authResult.membership.id,
-      userId: authResult.session.user.id,
-      startAt: payload.data.startAt,
-      endAt: payload.data.endAt,
-      editedById: authResult.session.user.id
-    }
-  });
+    if (overlaps.length === 0) {
+      const created = await tx.timeSession.create({
+        data: {
+          organizationUserId: authResult.membership.id,
+          userId: authResult.session.user.id,
+          startAt: payload.data.startAt,
+          endAt: payload.data.endAt,
+          editedById: authResult.session.user.id
+        }
+      });
 
-  await writeAuditLog({
-    actorUserId: authResult.session.user.id,
-    entityType: "time_session",
-    entityId: created.id,
-    action: "created_manual",
-    afterJson: {
-      startAt: created.startAt.toISOString(),
-      endAt: created.endAt?.toISOString()
+      await tx.auditLog.create({
+        data: {
+          actorUserId: authResult.session.user.id,
+          entityType: "time_session",
+          entityId: created.id,
+          action: "created_manual",
+          afterJson: {
+            startAt: created.startAt.toISOString(),
+            endAt: created.endAt?.toISOString()
+          }
+        }
+      });
+
+      return { status: 201 as const, session: created };
     }
+
+    const [primary, ...duplicates] = overlaps.sort((a: any, b: any) => a.startAt.getTime() - b.startAt.getTime());
+    const beforeJson = {
+      id: primary.id,
+      startAt: primary.startAt.toISOString(),
+      endAt: primary.endAt?.toISOString() ?? null
+    };
+
+    const updated = await tx.timeSession.update({
+      where: { id: primary.id },
+      data: {
+        startAt: payload.data.startAt,
+        endAt: payload.data.endAt,
+        editedById: authResult.session.user.id,
+        editReason: "auto_overlap_update"
+      }
+    });
+
+    const removedIds: string[] = [];
+    for (const duplicate of duplicates) {
+      await tx.timeSession.delete({ where: { id: duplicate.id } });
+      removedIds.push(duplicate.id);
+    }
+
+    await tx.auditLog.create({
+      data: {
+        actorUserId: authResult.session.user.id,
+        entityType: "time_session",
+        entityId: updated.id,
+        action: "updated_manual_overlap",
+        beforeJson,
+        afterJson: {
+          startAt: updated.startAt.toISOString(),
+          endAt: updated.endAt?.toISOString(),
+          removedOverlappingSessionIds: removedIds
+        }
+      }
+    });
+
+    return { status: 200 as const, session: updated };
   });
 
   return NextResponse.json(
     {
-      id: created.id,
-      startAt: created.startAt,
-      endAt: created.endAt,
-      editReason: created.editReason
+      id: result.session.id,
+      startAt: result.session.startAt,
+      endAt: result.session.endAt,
+      editReason: result.session.editReason
     },
-    { status: 201 }
+    { status: result.status }
   );
 }

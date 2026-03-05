@@ -62,6 +62,7 @@ model OrganizationUser {
 
   @@unique([organizationId, userId])
   @@index([organizationId, role])
+  @@index([organizationId, active])
 }
 
 model TimeSession {
@@ -79,6 +80,7 @@ model TimeSession {
   editedBy           User?            @relation("SessionEditor", fields: [editedById], references: [id])
 
   @@index([organizationUserId, startAt])
+  @@index([startAt])
   @@index([userId, endAt])
 }
 

@@ -2,6 +2,7 @@ import { endOfMonth, format, startOfMonth } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
+import { withSummaryCache } from "@/lib/perf-cache";
 import { requireSession } from "@/lib/rbac";
 import { minutesBetween } from "@/lib/time";
 import { monthQuerySchema } from "@/lib/validation";
@@ -43,10 +44,10 @@ export async function GET(request: NextRequest) {
     return total + minutesBetween(session.startAt, session.endAt);
   }, 0);
 
-  return NextResponse.json({
+  return withSummaryCache(NextResponse.json({
     month: query.data.month,
     monthStart,
     monthEnd,
     workedMinutes
-  });
+  }));
 }

@@ -2,6 +2,7 @@ import { addDays, formatISO, startOfDay } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
+import { withSummaryCache } from "@/lib/perf-cache";
 import { requireSession } from "@/lib/rbac";
 import { getWeekRange, minutesBetween, weekStartFromParam } from "@/lib/time";
 import { weekQuerySchema } from "@/lib/validation";
@@ -67,7 +68,7 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  return NextResponse.json({
+  return withSummaryCache(NextResponse.json({
     weekStart,
     weekEnd,
     workedMinutes,
@@ -76,5 +77,5 @@ export async function GET(request: NextRequest) {
     sessions,
     weekLocked: Boolean(weekLock),
     daily
-  });
+  }));
 }

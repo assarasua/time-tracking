@@ -1,26 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Route } from "next";
+import { format } from "date-fns";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-type Session = {
-  id: string;
-  startAt: string;
-  endAt: string | null;
-};
-
-type Summary = {
+type RangeSummary = {
+  from: string;
+  to: string;
   workedMinutes: number;
   expectedMinutes: number;
   varianceMinutes: number;
-  sessions: Session[];
-};
-
-type MonthSummary = {
-  workedMinutes: number;
+  daily: Array<{ date: string; workedMinutes: number }>;
+  monthly: Array<{ month: string; workedMinutes: number }>;
 };
 
 function formatMinutes(minutes: number) {
@@ -31,44 +25,37 @@ function formatMinutes(minutes: number) {
   return `${sign}${hours}h ${mins}m`;
 }
 
-export function ClockCard({ weekStart, month }: { weekStart: string; month: string }) {
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [monthSummary, setMonthSummary] = useState<MonthSummary | null>(null);
+export function ClockCard({ from, to }: { from: string; to: string }) {
+  const [summary, setSummary] = useState<RangeSummary | null>(null);
+  const [monthlyRows, setMonthlyRows] = useState<Array<{ month: string; workedMinutes: number }>>([]);
   const [status, setStatus] = useState<string>("Loading...");
+  const lastLoadedKeyRef = useRef<string>("");
   const timesheetRoute = "/timesheet" as Route;
 
   async function loadSummary() {
+    const rangeKey = `${from}:${to}`;
+    if (lastLoadedKeyRef.current === rangeKey) return;
+    lastLoadedKeyRef.current = rangeKey;
+
     setStatus("Loading...");
     setSummary(null);
-    setMonthSummary(null);
+    setMonthlyRows([]);
 
     try {
-      const [weekResponse, monthResponse] = await Promise.all([
-        fetch(`/api/me/week-summary?week_start=${weekStart}`),
-        fetch(`/api/me/month-summary?month=${month}`)
-      ]);
-
-      if (weekResponse.ok) {
-        const weekData = (await weekResponse.json()) as Summary;
-        setSummary(weekData);
-      }
-
-      if (monthResponse.ok) {
-        const monthData = (await monthResponse.json()) as MonthSummary;
-        setMonthSummary(monthData);
-      }
-
-      if (weekResponse.ok && monthResponse.ok) {
-        setStatus("Ready");
-        return;
-      }
-
-      if (weekResponse.status === 401 || monthResponse.status === 401) {
+      const response = await fetch(`/api/me/range-summary?from=${from}&to=${to}`);
+      if (response.status === 401) {
         setStatus("Session expired. Please sign in again.");
         return;
       }
+      if (!response.ok) {
+        setStatus("Unable to load summary");
+        return;
+      }
 
-      setStatus("Partially loaded");
+      const data = (await response.json()) as RangeSummary;
+      setSummary(data);
+      setMonthlyRows(data.monthly ?? []);
+      setStatus("Ready");
     } catch {
       setStatus("Unable to load summary");
     }
@@ -76,23 +63,22 @@ export function ClockCard({ weekStart, month }: { weekStart: string; month: stri
 
   useEffect(() => {
     void loadSummary();
-  }, [weekStart, month]);
+  }, [from, to]);
 
   const statTiles = [
     { label: "Worked", value: formatMinutes(summary?.workedMinutes ?? 0) },
     { label: "Expected", value: formatMinutes(summary?.expectedMinutes ?? 0) },
-    { label: "Variance", value: formatMinutes(summary?.varianceMinutes ?? 0) },
-    { label: "Month Worked", value: formatMinutes(monthSummary?.workedMinutes ?? 0) }
+    { label: "Variance", value: formatMinutes(summary?.varianceMinutes ?? 0) }
   ];
 
   return (
     <Card className="border-primary/20 bg-card/95 shadow-sm">
-      <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle>Weekly overview</CardTitle>
+      <CardHeader className="flex-col gap-2 space-y-0 sm:flex-row sm:items-center sm:justify-between">
+        <CardTitle className="text-lg sm:text-xl">Overview</CardTitle>
         <span className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground">{status}</span>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {statTiles.map((tile) => (
             <div key={tile.label} className="rounded-md border border-border bg-background p-3">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">{tile.label}</p>
@@ -109,18 +95,33 @@ export function ClockCard({ weekStart, month }: { weekStart: string; month: stri
         </div>
 
         <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-foreground">Recent entries</h4>
-          {(summary?.sessions ?? []).slice(-5).reverse().map((session) => (
-            <div
-              key={session.id}
-              className="flex flex-col justify-between gap-1 rounded-md border border-border bg-background p-3 text-sm sm:flex-row sm:items-center"
-            >
-              <span className="text-foreground">{new Date(session.startAt).toLocaleString()}</span>
-              <span className="text-muted-foreground">
-                {session.endAt ? new Date(session.endAt).toLocaleTimeString() : "Active"}
-              </span>
+          <h4 className="text-sm font-semibold text-foreground">Monthly hours</h4>
+          <div className="grid gap-2 sm:hidden">
+            {monthlyRows.map((row) => (
+              <div key={row.month} className="rounded-lg border border-border bg-background p-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  {format(new Date(`${row.month}-01T00:00:00.000Z`), "MMMM yyyy")}
+                </p>
+                <p className="mt-1 text-base font-semibold text-foreground">{formatMinutes(row.workedMinutes)}</p>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto rounded-md border border-border bg-background sm:block">
+            <div className="min-w-[320px]">
+              <div className="grid grid-cols-2 border-b border-border px-3 py-2 text-xs uppercase tracking-wide text-muted-foreground">
+                <span>Month</span>
+                <span className="text-right">Total worked</span>
+              </div>
+              {monthlyRows.map((row) => (
+                <div key={row.month} className="grid grid-cols-2 px-3 py-2 text-sm">
+                  <span className="font-medium text-foreground">
+                    {format(new Date(`${row.month}-01T00:00:00.000Z`), "MMMM yyyy")}
+                  </span>
+                  <span className="text-right font-semibold text-foreground">{formatMinutes(row.workedMinutes)}</span>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       </CardContent>
     </Card>
