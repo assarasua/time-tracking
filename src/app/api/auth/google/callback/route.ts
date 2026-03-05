@@ -31,6 +31,12 @@ function classifyAuthError(error: unknown) {
   }
   if (err?.name?.includes("PrismaClientInitializationError")) {
     if (
+      normalizedMessage.includes("could not locate the query engine") ||
+      normalizedMessage.includes("libquery_engine")
+    ) {
+      return { code: "session_create_failed", detail: "db_engine_missing" };
+    }
+    if (
       normalizedMessage.includes("unable to run in this browser environment") ||
       normalizedMessage.includes("edge runtime")
     ) {

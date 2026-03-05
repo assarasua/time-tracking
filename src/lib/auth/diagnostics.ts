@@ -65,6 +65,12 @@ function classifyDbError(error: unknown) {
   const prismaCode = typeof err?.code === "string" ? err.code : null;
 
   if (err?.name?.includes("PrismaClientInitializationError")) {
+    if (
+      message.includes("could not locate the query engine") ||
+      message.includes("libquery_engine")
+    ) {
+      return "db_engine_missing";
+    }
     if (message.includes("unable to run in this browser environment") || message.includes("edge runtime")) {
       return "db_runtime_unsupported";
     }
