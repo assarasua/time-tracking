@@ -147,21 +147,31 @@ export function DateRangePresetHeader({
 
       {mode === "custom" ? (
         <form
-          className="grid gap-3 sm:grid-cols-3"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
           onSubmit={(event) => {
             event.preventDefault();
             applyCustom();
           }}
         >
-          <label className="space-y-1 text-sm">
+          <label className="min-w-0 space-y-1 text-sm">
             <span className="font-medium text-foreground">From</span>
-            <Input type="date" value={from} onChange={(event) => handleManualDateChange("from", event.target.value)} />
+            <Input
+              type="date"
+              value={from}
+              className="min-w-0"
+              onChange={(event) => handleManualDateChange("from", event.target.value)}
+            />
           </label>
-          <label className="space-y-1 text-sm">
+          <label className="min-w-0 space-y-1 text-sm">
             <span className="font-medium text-foreground">To</span>
-            <Input type="date" value={to} onChange={(event) => handleManualDateChange("to", event.target.value)} />
+            <Input
+              type="date"
+              value={to}
+              className="min-w-0"
+              onChange={(event) => handleManualDateChange("to", event.target.value)}
+            />
           </label>
-          <div className="flex items-end">
+          <div className="flex items-end sm:col-span-2 sm:justify-end">
             <Button type="submit" className="w-full sm:w-auto">
               Apply
             </Button>
