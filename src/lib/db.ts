@@ -1,5 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import path from "node:path";
 import { Pool } from "pg";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
@@ -10,6 +12,33 @@ const adapter = new PrismaPg(
     connectionString
   })
 );
+
+function ensurePrismaCompilerWasm() {
+  const targetDir = "/node_modules/.prisma/client";
+  const targetFile = `${targetDir}/query_compiler_bg.wasm`;
+  if (existsSync(targetFile)) return;
+
+  const candidates = [
+    path.join(process.cwd(), "node_modules/.prisma/client/query_compiler_bg.wasm"),
+    path.join(process.cwd(), ".prisma/client/query_compiler_bg.wasm"),
+    path.join(process.cwd(), "node_modules/prisma/build/query_compiler_bg.postgresql.wasm"),
+    path.join(__dirname, "../../../node_modules/.prisma/client/query_compiler_bg.wasm"),
+    path.join(__dirname, "../../../../node_modules/.prisma/client/query_compiler_bg.wasm"),
+    path.join(__dirname, "../../../../../node_modules/.prisma/client/query_compiler_bg.wasm")
+  ];
+
+  const sourceFile = candidates.find((candidate) => existsSync(candidate));
+  if (!sourceFile) return;
+
+  try {
+    mkdirSync(targetDir, { recursive: true });
+    copyFileSync(sourceFile, targetFile);
+  } catch {
+    // If runtime path is not writable, diagnostics endpoint will expose the ENOENT root cause.
+  }
+}
+
+ensurePrismaCompilerWasm();
 
 export const db =
   globalForPrisma.prisma ??
