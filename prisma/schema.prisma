@@ -32,21 +32,23 @@ model Organization {
 }
 
 model User {
-  id            String             @id @default(cuid())
-  email         String             @unique
-  googleSub     String             @unique
-  name          String?
-  avatarUrl     String?
-  status        UserStatus         @default(active)
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  memberships   OrganizationUser[]
-  sessions      TimeSession[]      @relation("SessionOwner")
-  edits         TimeSession[]      @relation("SessionEditor")
-  audits        AuditLog[]         @relation("AuditActor")
-  lockedWeeks   WeekLock[]         @relation("LockActor")
-  appSessions   AppSession[]
-  preference    UserPreference?
+  id                  String                 @id @default(cuid())
+  email               String                 @unique
+  googleSub           String                 @unique
+  name                String?
+  avatarUrl           String?
+  status              UserStatus             @default(active)
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  memberships         OrganizationUser[]
+  sessions            TimeSession[]          @relation("SessionOwner")
+  edits               TimeSession[]          @relation("SessionEditor")
+  audits              AuditLog[]             @relation("AuditActor")
+  lockedWeeks         WeekLock[]             @relation("LockActor")
+  appSessions         AppSession[]
+  preference          UserPreference?
+  calendarConnections CalendarConnection[]
+  timeOffCalendarSync TimeOffCalendarSync[]
 }
 
 model OrganizationUser {
