@@ -17,7 +17,7 @@ async function main() {
     create: {
       id: "seed-org",
       name: orgName,
-      timezone: "America/New_York",
+      timezone: "America/Los_Angeles",
       weekStartDay: 1
     }
   });

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withSummaryCache } from "@/lib/perf-cache";
 import { requireSession } from "@/lib/rbac";
-import { minutesBetween } from "@/lib/time";
+import { calculateEffectiveWorkedMinutes } from "@/lib/time";
 import { monthQuerySchema } from "@/lib/validation";
 
 export async function GET(request: NextRequest) {
@@ -36,13 +36,21 @@ export async function GET(request: NextRequest) {
     },
     orderBy: {
       startAt: "asc"
+    },
+    select: {
+      id: true,
+      startAt: true,
+      endAt: true,
+      createdAt: true,
+      updatedAt: true
     }
   });
 
-  const workedMinutes = (sessions as any[]).reduce((total: number, session: any) => {
-    if (!session.endAt) return total;
-    return total + minutesBetween(session.startAt, session.endAt);
-  }, 0);
+  const workedMinutes = calculateEffectiveWorkedMinutes({
+    sessions: sessions as any[],
+    from: monthStart,
+    to: monthEnd
+  }).totalMinutes;
 
   return withSummaryCache(NextResponse.json({
     month: query.data.month,

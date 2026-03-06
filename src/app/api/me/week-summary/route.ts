@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withSummaryCache } from "@/lib/perf-cache";
 import { requireSession } from "@/lib/rbac";
-import { getWeekRange, minutesBetween, weekStartFromParam } from "@/lib/time";
+import { calculateEffectiveWorkedMinutes, getWeekRange, weekStartFromParam } from "@/lib/time";
 import { weekQuerySchema } from "@/lib/validation";
 
 export async function GET(request: NextRequest) {
@@ -35,10 +35,12 @@ export async function GET(request: NextRequest) {
     }
   });
 
-  const workedMinutes = (sessions as any[]).reduce((total: number, item: any) => {
-    if (!item.endAt) return total;
-    return total + minutesBetween(item.startAt, item.endAt);
-  }, 0);
+  const effectiveWorked = calculateEffectiveWorkedMinutes({
+    sessions: sessions as any[],
+    from: weekStart,
+    to: weekEnd
+  });
+  const workedMinutes = effectiveWorked.totalMinutes;
 
   const expectedMinutes = authResult.membership.weeklyTargetMinute;
   const weekLock = await db.weekLock.findUnique({
@@ -56,13 +58,11 @@ export async function GET(request: NextRequest) {
     const daySessions = (sessions as any[]).filter((session: any) =>
       session.startAt >= dayDate && session.startAt < nextDay
     );
-    const dayWorkedMinutes = daySessions.reduce((total: number, session: any) => {
-      if (!session.endAt) return total;
-      return total + minutesBetween(session.startAt, session.endAt);
-    }, 0);
+    const dateKey = formatISO(dayDate, { representation: "date" });
+    const dayWorkedMinutes = effectiveWorked.dailyMinutesByDate[dateKey] ?? 0;
 
     return {
-      date: formatISO(dayDate, { representation: "date" }),
+      date: dateKey,
       workedMinutes: dayWorkedMinutes,
       sessions: daySessions
     };

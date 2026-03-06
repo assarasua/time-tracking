@@ -53,7 +53,7 @@ function createDb(executor: Executor): any {
             .values({
               id: id(),
               name: String(args.data.name ?? "Default Organization"),
-              timezone: String(args.data.timezone ?? "America/New_York"),
+              timezone: String(args.data.timezone ?? "America/Los_Angeles"),
               weekStartDay: Number(args.data.weekStartDay ?? 1),
               createdAt: now(),
               updatedAt: now()

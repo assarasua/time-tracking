@@ -1,7 +1,7 @@
 import { eachDayOfInterval, eachMonthOfInterval, format, parseISO } from "date-fns";
 
 import { db } from "@/lib/db";
-import { minutesBetween } from "@/lib/time";
+import { calculateEffectiveWorkedMinutes } from "@/lib/time";
 
 export function normalizeRange(from: string, to: string) {
   const fromDate = parseISO(`${from}T00:00:00.000Z`);
@@ -45,27 +45,27 @@ export async function getMeRangeSummaryData(params: {
       startAt: "asc"
     },
     select: {
+      id: true,
       startAt: true,
-      endAt: true
+      endAt: true,
+      createdAt: true,
+      updatedAt: true
     }
   });
 
-  const workedMinutes = (sessions as any[]).reduce((total: number, session: any) => {
-    if (!session.endAt) return total;
-    return total + minutesBetween(session.startAt, session.endAt);
-  }, 0);
+  const effectiveWorked = calculateEffectiveWorkedMinutes({
+    sessions: sessions as any[],
+    from: range.fromDate,
+    to: range.toDate
+  });
+  const workedMinutes = effectiveWorked.totalMinutes;
 
   const expectedPerBusinessDay = Math.round(params.weeklyTargetMinute / 5);
   const expectedMinutes = expectedPerBusinessDay * businessDaysCount(range.fromDate, range.toDate);
 
   const daily = eachDayOfInterval({ start: range.fromDate, end: range.toDate }).map((day) => {
     const dayKey = format(day, "yyyy-MM-dd");
-    const dayWorkedMinutes = (sessions as any[]).reduce((total: number, session: any) => {
-      if (!session.endAt) return total;
-      return format(session.startAt, "yyyy-MM-dd") === dayKey
-        ? total + minutesBetween(session.startAt, session.endAt)
-        : total;
-    }, 0);
+    const dayWorkedMinutes = effectiveWorked.dailyMinutesByDate[dayKey] ?? 0;
 
     return {
       date: dayKey,
@@ -75,12 +75,16 @@ export async function getMeRangeSummaryData(params: {
 
   const monthly = eachMonthOfInterval({ start: range.fromDate, end: range.toDate }).map((monthDate) => {
     const monthKey = format(monthDate, "yyyy-MM");
-    const worked = (sessions as any[]).reduce((total: number, session: any) => {
-      if (!session.endAt) return total;
-      return format(session.startAt, "yyyy-MM") === monthKey
-        ? total + minutesBetween(session.startAt, session.endAt)
-        : total;
-    }, 0);
+    const monthStart = parseISO(`${monthKey}-01T00:00:00.000Z`);
+    const monthEnd = new Date(new Date(monthStart).setUTCMonth(monthStart.getUTCMonth() + 1, 0));
+    monthEnd.setUTCHours(23, 59, 59, 999);
+    const effectiveStart = monthStart > range.fromDate ? monthStart : range.fromDate;
+    const effectiveEnd = monthEnd < range.toDate ? monthEnd : range.toDate;
+    const worked = calculateEffectiveWorkedMinutes({
+      sessions: sessions as any[],
+      from: effectiveStart,
+      to: effectiveEnd
+    }).totalMinutes;
 
     return {
       month: monthKey,
@@ -134,7 +138,10 @@ export async function getAdminRangeOverviewData(params: {
       select: {
         organizationUserId: true,
         startAt: true,
-        endAt: true
+        endAt: true,
+        createdAt: true,
+        updatedAt: true,
+        id: true
       }
     })
   ]);
@@ -143,14 +150,12 @@ export async function getAdminRangeOverviewData(params: {
 
   const membersData = (members as any[]).map((member: any) => {
     const memberSessions = (sessions as any[]).filter((session: any) => session.organizationUserId === member.id);
-    const dailyMinutes = rangeDays.map((dayKey) =>
-      memberSessions.reduce((total: number, session: any) => {
-        if (!session.endAt) return total;
-        return format(session.startAt, "yyyy-MM-dd") === dayKey
-          ? total + minutesBetween(session.startAt, session.endAt)
-          : total;
-      }, 0)
-    );
+    const effectiveWorked = calculateEffectiveWorkedMinutes({
+      sessions: memberSessions,
+      from: range.fromDate,
+      to: range.toDate
+    });
+    const dailyMinutes = rangeDays.map((dayKey) => effectiveWorked.dailyMinutesByDate[dayKey] ?? 0);
 
     return {
       membershipId: member.id,
@@ -158,7 +163,7 @@ export async function getAdminRangeOverviewData(params: {
       userEmail: member.user.email,
       role: member.role,
       dailyMinutes,
-      rangeMinutes: dailyMinutes.reduce((sum, minutes) => sum + minutes, 0)
+      rangeMinutes: effectiveWorked.totalMinutes
     };
   });
 

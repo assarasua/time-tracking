@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
+import { publishTimeSessionChanged } from "@/lib/realtime";
 import { requireSession } from "@/lib/rbac";
 
 export async function POST() {
@@ -24,6 +25,12 @@ export async function POST() {
       userId: authResult.session.user.id,
       startAt: new Date()
     }
+  });
+
+  publishTimeSessionChanged({
+    userId: authResult.session.user.id,
+    organizationId: authResult.membership.organizationId,
+    membershipId: authResult.membership.id
   });
 
   return NextResponse.json({ id: session.id, startAt: session.startAt }, { status: 201 });

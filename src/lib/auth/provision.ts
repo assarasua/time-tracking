@@ -18,7 +18,7 @@ async function getOrCreateDefaultOrganizationTx(tx: typeof db) {
   return tx.organization.create({
     data: {
       name: "Default Organization",
-      timezone: "America/New_York",
+      timezone: "America/Los_Angeles",
       weekStartDay: 1
     }
   });

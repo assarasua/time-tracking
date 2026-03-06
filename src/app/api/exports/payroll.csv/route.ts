@@ -5,7 +5,7 @@ import { buildPayrollCsv } from "@/lib/csv";
 import { db } from "@/lib/db";
 import { Role } from "@/lib/db/schema";
 import { requireSession } from "@/lib/rbac";
-import { minutesBetween } from "@/lib/time";
+import { calculateEffectiveWorkedMinutes } from "@/lib/time";
 import { exportQuerySchema } from "@/lib/validation";
 
 function sanitizeFilePart(value: string) {
@@ -78,10 +78,11 @@ export async function GET(request: NextRequest) {
           session.endAt !== null
       );
 
-      const workedMinutes = monthSessions.reduce(
-        (total: number, session: any) => total + minutesBetween(session.startAt, session.endAt!),
-        0
-      );
+      const workedMinutes = calculateEffectiveWorkedMinutes({
+        sessions: monthSessions as any[],
+        from: effectiveStart,
+        to: effectiveEnd
+      }).totalMinutes;
       const businessDays = eachDayOfInterval({ start: effectiveStart, end: effectiveEnd }).filter((day) => {
         const dow = day.getUTCDay();
         return dow >= 1 && dow <= 5;

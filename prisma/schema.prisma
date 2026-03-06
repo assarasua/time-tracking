@@ -21,7 +21,7 @@ enum UserStatus {
 model Organization {
   id            String             @id @default(cuid())
   name          String
-  timezone      String             @default("America/New_York")
+  timezone      String             @default("America/Los_Angeles")
   weekStartDay  Int                @default(1)
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
@@ -45,6 +45,7 @@ model User {
   audits        AuditLog[]         @relation("AuditActor")
   lockedWeeks   WeekLock[]         @relation("LockActor")
   appSessions   AppSession[]
+  preference    UserPreference?
 }
 
 model OrganizationUser {
@@ -126,4 +127,13 @@ model AppSession {
   @@index([userId, expiresAt])
   @@index([organizationId, expiresAt])
   @@index([expiresAt])
+}
+
+model UserPreference {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  timezone  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

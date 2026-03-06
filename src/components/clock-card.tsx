@@ -70,6 +70,7 @@ export function ClockCard({ from, to }: { from: string; to: string }) {
     { label: "Expected", value: formatMinutes(summary?.expectedMinutes ?? 0) },
     { label: "Variance", value: formatMinutes(summary?.varianceMinutes ?? 0) }
   ];
+  const maxDailyMinutes = Math.max(1, ...(summary?.daily ?? []).map((day) => day.workedMinutes));
 
   return (
     <Card className="border-primary/20 bg-card/95 shadow-sm">
@@ -85,6 +86,30 @@ export function ClockCard({ from, to }: { from: string; to: string }) {
               <p className="mt-1 text-lg font-semibold text-foreground">{tile.value}</p>
             </div>
           ))}
+        </div>
+
+        <div className="hidden space-y-2 sm:block">
+          <h4 className="text-sm font-semibold text-foreground">Daily hours in selected range</h4>
+          <div className="overflow-x-auto rounded-md border border-border bg-background p-3">
+            <div className="flex min-w-max items-end gap-2">
+              {(summary?.daily ?? []).map((day) => {
+                const barHeight = Math.max(6, Math.round((day.workedMinutes / maxDailyMinutes) * 120));
+                return (
+                  <div key={day.date} className="w-12 shrink-0 space-y-1 text-center">
+                    <p className="text-[11px] font-medium text-foreground">{formatMinutes(day.workedMinutes)}</p>
+                    <div className="flex h-32 items-end rounded-md bg-muted/60 px-1 pb-1">
+                      <div
+                        className="w-full rounded-sm bg-primary transition-all"
+                        style={{ height: `${barHeight}px` }}
+                        title={`${day.date}: ${formatMinutes(day.workedMinutes)}`}
+                      />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">{format(new Date(`${day.date}T00:00:00.000Z`), "MMM d")}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         <div className="rounded-md border border-border bg-muted/50 p-3 text-sm text-muted-foreground">

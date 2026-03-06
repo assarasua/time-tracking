@@ -83,6 +83,14 @@ export interface AppSessionTable {
   revokedAt: Date | null;
 }
 
+export interface UserPreferenceTable {
+  id: string;
+  userId: string;
+  timezone: string;
+  createdAt: ColumnType<Date, Date | string | undefined, never>;
+  updatedAt: ColumnType<Date, Date | string | undefined, Date | string | undefined>;
+}
+
 export interface Database {
   Organization: OrganizationTable;
   User: UserTable;
@@ -91,4 +99,5 @@ export interface Database {
   WeekLock: WeekLockTable;
   AuditLog: AuditLogTable;
   AppSession: AppSessionTable;
+  UserPreference: UserPreferenceTable;
 }

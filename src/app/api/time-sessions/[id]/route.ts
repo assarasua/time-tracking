@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isWithinInterval } from "date-fns";
+import { addDays, endOfDay } from "date-fns";
 
 import { writeAuditLog } from "@/lib/audit";
 import { db } from "@/lib/db";
@@ -45,11 +45,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { weekStart, weekEnd } = getWeekRange(new Date(), existing.organizationUser.organization.weekStartDay);
+  const targetWeek = getWeekRange(payload.data.startAt, existing.organizationUser.organization.weekStartDay);
 
   if (!isAdmin) {
-    if (!isWithinInterval(payload.data.startAt, { start: weekStart, end: weekEnd })) {
-      return NextResponse.json({ error: "Employees can only edit current week" }, { status: 403 });
+    const editDeadline = addDays(endOfDay(payload.data.startAt), 7);
+    if (new Date() > editDeadline) {
+      return NextResponse.json({ error: "Employees can only modify hours up to 7 days after that day" }, { status: 403 });
     }
   }
 
@@ -57,7 +58,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     where: {
       organizationId_weekStart: {
         organizationId: existing.organizationUser.organizationId,
-        weekStart
+        weekStart: targetWeek.weekStart
       }
     }
   });

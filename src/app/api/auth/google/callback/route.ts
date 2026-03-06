@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
       organizationId: membership.organizationId
     });
 
-    const response = NextResponse.redirect(new URL("/dashboard", getRequestBaseUrl(request)));
+    const response = NextResponse.redirect(new URL("/timesheet", getRequestBaseUrl(request)));
     response.cookies.set({
       name: SESSION_COOKIE_NAME,
       value: appSession.token,

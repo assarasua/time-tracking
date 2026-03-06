@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { addDays, endOfDay, startOfDay } from "date-fns";
 
 import { db } from "@/lib/db";
 import type { DbClient } from "@/lib/db";
 import { Role } from "@/lib/db/schema";
+import { publishTimeSessionChanged } from "@/lib/realtime";
 import { requireSession } from "@/lib/rbac";
 import { getWeekRange } from "@/lib/time";
 import { createSessionSchema } from "@/lib/validation";
@@ -23,14 +25,20 @@ export async function POST(request: NextRequest) {
   const isAdmin = authResult.membership.role === Role.admin;
   const organizationWeekStartDay = authResult.membership.organization.weekStartDay;
   const targetWeek = getWeekRange(payload.data.startAt, organizationWeekStartDay);
-  const currentWeek = getWeekRange(new Date(), organizationWeekStartDay);
+  const dayStart = startOfDay(payload.data.startAt);
+  const todayStart = startOfDay(new Date());
+
+  if (dayStart > todayStart) {
+    return NextResponse.json({ error: "Add hours is not allowed for future dates" }, { status: 403 });
+  }
+
+  const addDeadline = addDays(endOfDay(payload.data.startAt), 7);
+
+  if (new Date() > addDeadline) {
+    return NextResponse.json({ error: "Add hours is only allowed up to 7 days after that day" }, { status: 403 });
+  }
 
   if (!isAdmin) {
-    const isCurrentWeek = targetWeek.weekStart.getTime() === currentWeek.weekStart.getTime();
-    if (!isCurrentWeek || payload.data.endAt > targetWeek.weekEnd) {
-      return NextResponse.json({ error: "Employees can only add entries in current week" }, { status: 403 });
-    }
-
     const lock = await db.weekLock.findUnique({
       where: {
         organizationId_weekStart: {
@@ -64,72 +72,50 @@ export async function POST(request: NextRequest) {
         (sessionItem.endAt === null || sessionItem.endAt > payload.data.startAt)
     );
 
-    if (overlaps.length === 0) {
-      const created = await tx.timeSession.create({
-        data: {
-          organizationUserId: authResult.membership.id,
-          userId: authResult.session.user.id,
-          startAt: payload.data.startAt,
-          endAt: payload.data.endAt,
-          editedById: authResult.session.user.id
-        }
-      });
-
-      await tx.auditLog.create({
-        data: {
-          actorUserId: authResult.session.user.id,
-          entityType: "time_session",
-          entityId: created.id,
-          action: "created_manual",
-          afterJson: {
-            startAt: created.startAt.toISOString(),
-            endAt: created.endAt?.toISOString()
-          }
-        }
-      });
-
-      return { status: 201 as const, session: created };
-    }
-
-    const [primary, ...duplicates] = overlaps.sort((a: any, b: any) => a.startAt.getTime() - b.startAt.getTime());
-    const beforeJson = {
-      id: primary.id,
-      startAt: primary.startAt.toISOString(),
-      endAt: primary.endAt?.toISOString() ?? null
-    };
-
-    const updated = await tx.timeSession.update({
-      where: { id: primary.id },
+    const created = await tx.timeSession.create({
       data: {
+        organizationUserId: authResult.membership.id,
+        userId: authResult.session.user.id,
         startAt: payload.data.startAt,
         endAt: payload.data.endAt,
         editedById: authResult.session.user.id,
-        editReason: "auto_overlap_update"
+        editReason: overlaps.length > 0 ? "manual_override" : null
       }
     });
 
     const removedIds: string[] = [];
-    for (const duplicate of duplicates) {
-      await tx.timeSession.delete({ where: { id: duplicate.id } });
-      removedIds.push(duplicate.id);
+    if (overlaps.length > 0) {
+      for (const sessionItem of overlaps) {
+        await tx.timeSession.delete({ where: { id: sessionItem.id } });
+        removedIds.push(sessionItem.id);
+      }
     }
 
     await tx.auditLog.create({
       data: {
         actorUserId: authResult.session.user.id,
         entityType: "time_session",
-        entityId: updated.id,
-        action: "updated_manual_overlap",
-        beforeJson,
+        entityId: created.id,
+        action: overlaps.length > 0 ? "created_manual_override" : "created_manual",
         afterJson: {
-          startAt: updated.startAt.toISOString(),
-          endAt: updated.endAt?.toISOString(),
-          removedOverlappingSessionIds: removedIds
+          startAt: created.startAt.toISOString(),
+          endAt: created.endAt?.toISOString(),
+          overriddenSessionIds: removedIds
         }
       }
     });
 
-    return { status: 200 as const, session: updated };
+    return {
+      status: overlaps.length > 0 ? (200 as const) : (201 as const),
+      session: created,
+      overriddenSessionIds: removedIds
+    };
+  });
+
+  publishTimeSessionChanged({
+    userId: authResult.session.user.id,
+    organizationId: authResult.membership.organizationId,
+    membershipId: authResult.membership.id
   });
 
   return NextResponse.json(
@@ -137,7 +123,8 @@ export async function POST(request: NextRequest) {
       id: result.session.id,
       startAt: result.session.startAt,
       endAt: result.session.endAt,
-      editReason: result.session.editReason
+      editReason: result.session.editReason,
+      overriddenSessionIds: result.overriddenSessionIds
     },
     { status: result.status }
   );

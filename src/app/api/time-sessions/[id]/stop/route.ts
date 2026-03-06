@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
+import { publishTimeSessionChanged } from "@/lib/realtime";
 import { requireSession } from "@/lib/rbac";
 
 export async function POST(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -25,6 +26,12 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
   const updated = await db.timeSession.update({
     where: { id },
     data: { endAt: new Date() }
+  });
+
+  publishTimeSessionChanged({
+    userId: authResult.session.user.id,
+    organizationId: authResult.membership.organizationId,
+    membershipId: authResult.membership.id
   });
 
   return NextResponse.json({ id: updated.id, startAt: updated.startAt, endAt: updated.endAt });
