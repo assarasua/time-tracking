@@ -500,10 +500,13 @@ export function TimesheetBoard({
 
     setIsLoading(true);
     setStatus("Loading range...");
+    const requestNonce = Date.now();
 
     const results = await Promise.all(
       weekStarts.map(async (weekStart) => {
-        const response = await fetch(`/api/me/week-summary?week_start=${weekStart}`);
+        const response = await fetch(`/api/me/week-summary?week_start=${weekStart}&_rt=${requestNonce}`, {
+          cache: "no-store"
+        });
         if (!response.ok) return null;
         return (await response.json()) as WeekSummaryResponse;
       })
