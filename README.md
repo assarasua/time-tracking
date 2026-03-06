@@ -1,41 +1,69 @@
-# Time Tracking Web App
+# Hutech Time Tracking
 
-Single-company time tracking platform with Google OAuth, server-managed sessions, PostgreSQL persistence, weekly/monthly insights, admin operations, and payroll-ready CSV exports.
+Production-ready single-company time tracking app with Google OAuth, custom app sessions, PostgreSQL persistence, real-time timesheet updates, timezone profile settings, admin controls, and payroll CSV exports.
 
-This repository is designed for production on **Railway Node** with PostgreSQL, and supports custom domain fronting (for example Cloudflare DNS/proxy).
+## 1. What This App Does
 
-## 1. Product Overview
-
-### Core user outcomes
-- Sign in with Google and access personal workspace.
-- Log and edit worked time from timesheet.
-- See worked vs expected vs variance over selected ranges.
-- Download monthly payroll CSV (per employee or all employees).
+### Employee outcomes
+- Sign in with Google and access the workspace.
+- Use a single **Clock in / Clock out** button in Timesheet.
+- Add manual hours by day (with policy constraints).
+- See worked/expected/variance by selected date range.
+- Review day sessions in local selected profile timezone.
 
 ### Admin outcomes
-- View organization members and role state.
-- Review employee range-based daily totals.
-- Export monthly payroll data for selected date windows.
-- Lock/unlock payroll weeks and manage policy constraints.
+- View people and role status.
+- Review employee daily/range totals.
+- Update member status and weekly target.
+- Lock/unlock weeks.
+- Export monthly payroll CSV by selected date range (single employee or all employees).
 
-## 2. Tech Stack
+## 2. Core UX Improvements Implemented
 
-- **Frontend/App**: Next.js 15 (App Router), React 19, TypeScript
-- **Styling**: TailwindCSS + HuTech tokenized design system
-- **DB Runtime**: Kysely + `pg`
-- **Schema/Migrations**: Prisma (migrations + seed only)
-- **Auth**: Custom Google OAuth + HttpOnly app sessions (no NextAuth runtime)
+- **Default post-login page is Timesheet**.
+- **Single toggle clock action** in Timesheet (`Clock in` / `Clock out`) with live running timer.
+- **Real-time refresh** for timesheet changes via server push stream (`/api/realtime/stream`).
+- **Auto-open sessions** after saving manual hours.
+- **Manual time input supports both typing and suggested 15-min slots**.
+- **Override flow with confirmation modal** when manual range overlaps existing session.
+- On confirmed override, previous overlapping records are deleted and audit-logged.
+- **Add hours policy is enforced in UI + API**:
+  - no future dates,
+  - no dates older than 7 days from current day.
+- **Profile timezone settings moved to top bar** (click avatar/name opens modal settings).
+- Timezone choices are constrained to:
+  - Madrid (CET/CEST)
+  - New York (ET)
+  - Los Angeles (PT)
+  - Manila (PHT)
+- Org default timezone set to **America/Los_Angeles**.
+- Dashboard includes **daily-hours chart** for selected range (desktop/tablet only, hidden on mobile).
+
+## 3. Tech Stack
+
+- **App**: Next.js 15 (App Router), React 19, TypeScript
+- **Styling**: TailwindCSS with HuTech tokenized design patterns
+- **Runtime DB access**: Kysely + `pg`
+- **Schema tooling**: Prisma schema/seed (Prisma client package still present)
+- **Auth**: Custom Google OAuth + server-managed HttpOnly sessions
 - **Email**: Resend (reminder jobs)
 
-## 3. Architecture
+## 4. Authentication and Sessions
 
-### Auth model
-- `/api/auth/google/start` builds OAuth URL + state cookie.
-- `/api/auth/google/callback` validates state, exchanges code, fetches Google profile, provisions membership, creates app session.
-- Session cookie: `tt_session` (HttpOnly, Secure in HTTPS, SameSite=Lax).
-- Session records stored in `AppSession` table (token hash + expiry/revocation).
+### Flow
+1. `GET /api/auth/google/start` creates OAuth state + redirects to Google.
+2. `GET /api/auth/google/callback` validates state, exchanges token, fetches profile, provisions user/membership, creates app session.
+3. Session cookie: `tt_session` (HttpOnly, SameSite=Lax, Secure on HTTPS).
 
-### Data model (active tables)
+### Provisioning rules
+- New users are provisioned automatically on first valid Google login.
+- Forced admin emails are supported in provisioning logic.
+
+### Session storage
+- `AppSession` table stores token hash, expiry, and revocation metadata.
+
+## 5. Data Model (Active)
+
 - `Organization`
 - `User`
 - `OrganizationUser`
@@ -43,84 +71,41 @@ This repository is designed for production on **Railway Node** with PostgreSQL, 
 - `WeekLock`
 - `AuditLog`
 - `AppSession`
+- `UserPreference` (profile timezone)
 
-### Performance model (current)
-- Added aggregated endpoints for range summaries:
-  - `GET /api/me/range-summary`
-  - `GET /api/admin/range-overview`
-- Summary endpoints use short cache policy (30s):
-  - `Cache-Control: private, max-age=0, s-maxage=30, stale-while-revalidate=30`
+## 6. Business Rules
 
-## 4. Project Structure
+### Manual add-hours (`POST /api/time-sessions`)
+- `endAt` must be after `startAt`.
+- Not allowed for future dates.
+- Not allowed if target day is older than 7 days from now.
+- Non-admins cannot add hours in locked weeks.
+- Overlap behavior:
+  - prompts confirmation in UI,
+  - creates new session,
+  - deletes previous overlapping sessions,
+  - logs override in `AuditLog`.
 
-- `src/app/` app routes and API handlers
-- `src/components/` UI and feature components
-- `src/lib/` auth, db adapter, aggregates, validation, utility modules
-- `prisma/schema.prisma` schema + indexes
-- `prisma/seed.mjs` seed utility
+### Edit existing session (`PATCH /api/time-sessions/{id}`)
+- Same 7-day historical restriction for non-admins.
+- Enforces week-lock policy for non-admins.
 
-## 5. Environment Variables
+### Daily completion status
+- `Complete` when day total >= **8h (480m)**.
+- `Partial` when day total > 0 and < 8h.
 
-Required for runtime:
+## 7. Real-Time Updates
 
-- `DATABASE_URL` (PostgreSQL URL)
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `AUTH_SECRET`
+This app uses a server push stream (SSE) to propagate session changes instantly.
 
-Recommended:
+- Stream endpoint: `GET /api/realtime/stream`
+- Publisher events on:
+  - `POST /api/time-sessions`
+  - `POST /api/time-sessions/start`
+  - `POST /api/time-sessions/{id}/stop`
+- Timesheet subscribes with `EventSource` and reloads selected range on `time_session_changed`.
 
-- `APP_BASE_URL` (defaults in code to `https://time-tracking.hutech.tech` if omitted)
-- `AUTH_TRUST_HOST` (`true` recommended when behind proxy)
-- `EMAIL_API_KEY`
-- `EMAIL_FROM_ADDRESS`
-- `CRON_SECRET`
-
-Reference: `.env.example`
-
-## 6. Local Development
-
-### Install
-
-```bash
-npm install
-```
-
-### Configure env
-
-```bash
-cp .env.example .env.local
-# fill required values
-```
-
-### Run migrations (first run / schema updates)
-
-```bash
-npm run prisma:deploy
-```
-
-### Optional seed
-
-```bash
-npm run prisma:seed
-```
-
-### Start dev server
-
-```bash
-npm run dev -- --port 3000
-```
-
-Open: `http://localhost:3000`
-
-## 7. Build & Quality
-
-```bash
-npm run typecheck
-npm run build
-```
-
-## 8. API Surface (Current)
+## 8. API Surface
 
 ### Auth
 - `GET /api/auth/google/start`
@@ -130,16 +115,24 @@ npm run build
 - `GET /api/auth/diagnostics`
 - `GET /api/auth/error`
 
+### Profile
+- `GET /api/me/profile`
+- `PATCH /api/me/profile`
+
 ### User summaries
 - `GET /api/me/week-summary?week_start=YYYY-MM-DD`
 - `GET /api/me/month-summary?month=YYYY-MM`
 - `GET /api/me/range-summary?from=YYYY-MM-DD&to=YYYY-MM-DD`
 
 ### Time sessions
+- `GET /api/time-sessions/active`
 - `POST /api/time-sessions/start`
 - `POST /api/time-sessions/{id}/stop`
 - `POST /api/time-sessions`
 - `PATCH /api/time-sessions/{id}`
+
+### Realtime
+- `GET /api/realtime/stream`
 
 ### Admin
 - `GET /api/admin/range-overview?from=YYYY-MM-DD&to=YYYY-MM-DD`
@@ -152,89 +145,117 @@ npm run build
 - `GET /api/exports/payroll.csv?from=YYYY-MM-DD&to=YYYY-MM-DD`
 - `GET /api/exports/payroll.csv?from=YYYY-MM-DD&to=YYYY-MM-DD&membership_id=<id>`
 
-## 9. CSV Behavior
+### Jobs
+- `POST /api/jobs/auto-lock`
+- `POST /api/jobs/reminders`
 
-- Export is **monthly aggregated** inside selected date range.
-- Per-person filename:
+## 9. CSV Export Behavior
+
+- Export is monthly-aggregated within selected range.
+- Per-person file:
   - `<employee-name>-YYYY-MM-DD-to-YYYY-MM-DD.csv`
-- All-employees filename:
+- All employees file:
   - `hutech-YYYY-MM-DD-to-YYYY-MM-DD-monthly.csv`
 
-## 10. Deploy (Railway Node)
+## 10. Environment Variables
 
-### Recommended Railway commands
+### Required
+- `DATABASE_URL`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `AUTH_SECRET`
 
-Build:
+### Recommended
+- `APP_BASE_URL`
+- `AUTH_TRUST_HOST=true`
+- `EMAIL_API_KEY`
+- `EMAIL_FROM_ADDRESS`
+- `CRON_SECRET`
+
+Use `.env.example` as base.
+
+## 11. Local Development
+
+```bash
+npm install
+cp .env.example .env.local
+npm run prisma:deploy
+npm run dev -- --port 3000
+```
+
+Open: `http://localhost:3000`
+
+Optional seed:
+
+```bash
+npm run prisma:seed
+```
+
+## 12. Build and Quality
+
+```bash
+npm run typecheck
+npm run build
+```
+
+## 13. Deploy (Railway Node)
+
+### Build command
+
 ```bash
 npm ci --include=dev && npx prisma migrate deploy && npm run build
 ```
 
-Start:
+### Start command
+
 ```bash
 npm run start
 ```
 
-### Notes
-- Keep app runtime on Railway Node (not edge runtime for DB code).
-- Ensure `DATABASE_URL` points to reachable PostgreSQL host from Railway service.
-- If using internal Railway host, ensure service networking is correctly linked.
-
-## 11. Troubleshooting
-
-### A) OAuth errors
-
-#### `oauth_provider_misconfigured`
-- Validate `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
-- Ensure Google OAuth redirect URI exactly matches:
+### Deploy notes
+- Keep runtime on Railway Node (not edge runtime for DB code).
+- Ensure production domain matches Google callback URL:
   - `<APP_BASE_URL>/api/auth/google/callback`
+- If using proxy/CDN, forward host/proto correctly.
 
-#### `oauth_state_invalid`
-- Usually mixed host/protocol or stale cookies.
-- Ensure `APP_BASE_URL` matches actual domain.
-- Ensure proxy forwards host/proto correctly.
+## 14. Troubleshooting
 
-### B) Session creation errors
+### OAuth / login
+- `oauth_provider_misconfigured`:
+  - verify Google client ID/secret and callback URL.
+- `oauth_state_invalid`:
+  - host/proto mismatch, stale cookies, or wrong `APP_BASE_URL`.
 
-#### `db_unreachable`
-- DB host/port not reachable from runtime network.
-- Verify `DATABASE_URL` and network path.
+### DB connectivity
+- `db_unreachable`:
+  - DB host/port not reachable from runtime.
+- `db_auth_failed`:
+  - invalid credentials.
+- `db_schema_missing`:
+  - run `npx prisma migrate deploy`.
 
-#### `db_auth_failed`
-- Invalid DB credentials in `DATABASE_URL`.
+### Frontend stale bundle error
+- `__webpack_modules__[moduleId] is not a function`
 
-#### `db_schema_missing`
-- Run `npx prisma migrate deploy` on deployment.
+```bash
+rm -rf .next
+npm run dev -- --port 3000
+```
 
-### C) Frontend runtime chunk error
+Hard refresh browser afterward.
 
-#### `__webpack_modules__[moduleId] is not a function`
-- Usually stale local chunks after heavy changes.
-- Fix:
-  ```bash
-  # stop dev server
-  rm -rf .next
-  npm run dev -- --port 3000
-  ```
-- Hard refresh browser (`Cmd+Shift+R`).
+## 15. Security Notes
 
-## 12. Performance Notes
+- Never commit secrets.
+- Use environment variables per environment.
+- Keep `AUTH_SECRET` high entropy and rotate as needed.
+- Enforce HTTPS in production.
 
-Implemented improvements:
-- Reduced dashboard fan-out to one aggregated summary call.
-- Added short cache headers for repeated summary loads.
-- Added server-side aggregate helpers for user/admin range responses.
-- Added basic perf logs in aggregated endpoints (`dbMs`, `totalMs`).
+## 16. Repository Map
 
-## 13. Security Notes
+- `src/app/` routes and API handlers
+- `src/components/` UI and interaction components
+- `src/lib/` auth, db, realtime, aggregates, utilities
+- `prisma/schema.prisma` schema reference
+- `prisma/seed.mjs` seed script
 
-- Never commit secrets or raw credentials.
-- Use env vars only in deploy/runtime environments.
-- Keep `AUTH_SECRET` high-entropy and rotate for production changes.
-- Enforce HTTPS in production so secure cookies are always set.
-
-## 14. Maintenance Guidelines
-
-- Keep Prisma for schema/migrations and seed only.
-- Keep runtime DB access in `src/lib/db.ts` + Kysely layers.
-- Prefer adding new aggregate endpoints for heavy UI analytics instead of client fan-out.
-- Preserve backward compatibility for existing API contracts whenever possible.
