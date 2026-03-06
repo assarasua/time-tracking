@@ -1,7 +1,8 @@
-import { format } from "date-fns";
+import { endOfMonth, format, startOfMonth } from "date-fns";
 import { redirect } from "next/navigation";
 
 import { getAdminRangeOverviewData } from "@/lib/aggregates";
+import { AdminTimeOffSummary } from "@/components/admin-time-off-summary";
 import { DateRangePresetHeader } from "@/components/date-range-preset-header";
 import { ExportDownloadButton } from "@/components/export-download-button";
 import { AppNav } from "@/components/nav";
@@ -43,8 +44,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
     : fallback;
   const selectedFrom = selected.from;
   const selectedTo = selected.to;
-  const exportFrom = selectedFrom;
-  const exportTo = selectedTo;
+  const currentMonth = new Date();
+  const exportFrom = format(startOfMonth(currentMonth), "yyyy-MM-dd");
+  const exportTo = format(endOfMonth(currentMonth), "yyyy-MM-dd");
 
   const [members, overview] = await Promise.all([
     db.organizationUser.findMany({
@@ -75,60 +77,20 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
       }
     ])
   );
-
   return (
     <div className="space-y-5">
       <AppNav role={session.user.role} user={session.user} />
 
       <Card>
         <CardHeader>
-          <CardTitle>View filters</CardTitle>
-          <CardDescription>Pick current week, previous, next, or custom range. Monthly CSV exports always use these selected dates.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DateRangePresetHeader initialFrom={selectedFrom} initialTo={selectedTo} weekStartsOn={normalizedWeekStart} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>People</CardTitle>
-          <CardDescription>Active organization members, roles, and monthly CSV export per selected range.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {members.map((member: any) => (
-            <div
-              key={member.id}
-              className="flex flex-col gap-3 rounded-lg border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div>
-                <p className="text-sm font-medium text-foreground">{member.user.name ?? member.user.email}</p>
-                <p className="text-xs text-muted-foreground">{member.user.email}</p>
-              </div>
-              <div className="flex items-center justify-between gap-3 sm:justify-end">
-                <span className="rounded-full bg-success px-3 py-1 text-xs font-semibold text-success-foreground">
-                  {member.role}
-                </span>
-                <ExportDownloadButton
-                  href={`/api/exports/payroll.csv?from=${exportFrom}&to=${exportTo}&membership_id=${member.id}`}
-                  label="Download monthly CSV"
-                  variant="ghost"
-                  className="h-9 border border-border bg-background px-3 text-xs font-semibold text-foreground hover:bg-muted"
-                />
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Employee hours overview</CardTitle>
+          <CardTitle>Monthly Employee hours report</CardTitle>
           <CardDescription>
             Daily hours and totals based on selected filter dates ({selectedFrom} to {selectedTo}).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          <DateRangePresetHeader initialFrom={selectedFrom} initialTo={selectedTo} weekStartsOn={normalizedWeekStart} />
+
           <div className="space-y-2 md:hidden">
             {members.map((member: any) => {
               const bucket = hoursByMember.get(member.id);
@@ -198,13 +160,62 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
 
       <Card>
         <CardHeader>
-          <CardTitle>Monthly Exports</CardTitle>
-          <CardDescription>Download all employees monthly totals for the selected date range.</CardDescription>
+          <CardTitle>People</CardTitle>
+          <CardDescription>Active organization members, roles, and monthly CSV export for the current month.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {members.map((member: any) => (
+            <div
+              key={member.id}
+              className="flex flex-col gap-3 rounded-lg border border-border bg-background p-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div>
+                <p className="text-sm font-medium text-foreground">{member.user.name ?? member.user.email}</p>
+                <p className="text-xs text-muted-foreground">{member.user.email}</p>
+              </div>
+              <div className="flex items-center justify-between gap-3 sm:justify-end">
+                <span className="rounded-full bg-success px-3 py-1 text-xs font-semibold text-success-foreground">
+                  {member.role}
+                </span>
+                <ExportDownloadButton
+                  href={`/api/exports/payroll.csv?from=${exportFrom}&to=${exportTo}&membership_id=${member.id}`}
+                  label="Download monthly CSV"
+                  variant="ghost"
+                  className="h-9 border border-border bg-background px-3 text-xs font-semibold text-foreground hover:bg-muted"
+                />
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Monthly Hours export</CardTitle>
+          <CardDescription>Download all employees monthly hour totals for the current month.</CardDescription>
         </CardHeader>
         <CardContent>
           <ExportDownloadButton
             href={`/api/exports/payroll.csv?from=${exportFrom}&to=${exportTo}`}
             label="Download all employees monthly CSV"
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Time off</CardTitle>
+          <CardDescription>
+            Total requested days by employee. Open details to inspect the exact saved dates.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AdminTimeOffSummary
+            members={members.map((member: any) => ({
+              membershipId: member.id,
+              name: member.user.name ?? member.user.email,
+              email: member.user.email
+            }))}
           />
         </CardContent>
       </Card>

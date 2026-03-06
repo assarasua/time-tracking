@@ -6,6 +6,8 @@ import type { Route } from "next";
 import { format } from "date-fns";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getCaliforniaPublicHolidaysByDate } from "@/lib/california-holidays";
+import { formatDateOnly } from "@/lib/date-only";
 
 type RangeSummary = {
   from: string;
@@ -13,9 +15,21 @@ type RangeSummary = {
   workedMinutes: number;
   expectedMinutes: number;
   varianceMinutes: number;
+  annualTimeOffDays: number;
   daily: Array<{ date: string; workedMinutes: number }>;
-  monthly: Array<{ month: string; workedMinutes: number }>;
 };
+
+type TimeOffEntry = {
+  id: string;
+  date: string;
+  type: "vacation" | "unpaid_leave" | "not_working" | "pto";
+};
+
+function timeOffLabel(type: TimeOffEntry["type"]) {
+  if (type === "pto" || type === "unpaid_leave") return "Unpaid leave";
+  if (type === "not_working") return "Not working";
+  return "Vacation";
+}
 
 function formatMinutes(minutes: number) {
   const sign = minutes < 0 ? "-" : "";
@@ -27,10 +41,12 @@ function formatMinutes(minutes: number) {
 
 export function ClockCard({ from, to }: { from: string; to: string }) {
   const [summary, setSummary] = useState<RangeSummary | null>(null);
-  const [monthlyRows, setMonthlyRows] = useState<Array<{ month: string; workedMinutes: number }>>([]);
+  const [plannedDaysOff, setPlannedDaysOff] = useState<TimeOffEntry[]>([]);
   const [status, setStatus] = useState<string>("Loading...");
   const lastLoadedKeyRef = useRef<string>("");
   const timesheetRoute = "/timesheet" as Route;
+  const timeOffRoute = "/time-off" as Route;
+  const publicHolidays = [...getCaliforniaPublicHolidaysByDate(from, to).values()];
 
   async function loadSummary() {
     const rangeKey = `${from}:${to}`;
@@ -39,22 +55,32 @@ export function ClockCard({ from, to }: { from: string; to: string }) {
 
     setStatus("Loading...");
     setSummary(null);
-    setMonthlyRows([]);
+    setPlannedDaysOff([]);
 
     try {
-      const response = await fetch(`/api/me/range-summary?from=${from}&to=${to}`);
-      if (response.status === 401) {
+      const [summaryResponse, timeOffResponse] = await Promise.all([
+        fetch(`/api/me/range-summary?from=${from}&to=${to}`),
+        fetch(`/api/time-off?from=${from}&to=${to}`, { cache: "no-store" })
+      ]);
+
+      if (summaryResponse.status === 401 || timeOffResponse.status === 401) {
         setStatus("Session expired. Please sign in again.");
         return;
       }
-      if (!response.ok) {
+
+      if (!summaryResponse.ok) {
         setStatus("Unable to load summary");
         return;
       }
 
-      const data = (await response.json()) as RangeSummary;
+      const data = (await summaryResponse.json()) as RangeSummary;
       setSummary(data);
-      setMonthlyRows(data.monthly ?? []);
+
+      if (timeOffResponse.ok) {
+        const timeOffData = (await timeOffResponse.json()) as { entries?: TimeOffEntry[] };
+        setPlannedDaysOff((timeOffData.entries ?? []).sort((a, b) => a.date.localeCompare(b.date)));
+      }
+
       setStatus("Ready");
     } catch {
       setStatus("Unable to load summary");
@@ -68,7 +94,8 @@ export function ClockCard({ from, to }: { from: string; to: string }) {
   const statTiles = [
     { label: "Worked", value: formatMinutes(summary?.workedMinutes ?? 0) },
     { label: "Expected", value: formatMinutes(summary?.expectedMinutes ?? 0) },
-    { label: "Variance", value: formatMinutes(summary?.varianceMinutes ?? 0) }
+    { label: "Variance", value: formatMinutes(summary?.varianceMinutes ?? 0) },
+    { label: "Days off this year", value: String(summary?.annualTimeOffDays ?? 0) }
   ];
   const maxDailyMinutes = Math.max(1, ...(summary?.daily ?? []).map((day) => day.workedMinutes));
 
@@ -79,7 +106,7 @@ export function ClockCard({ from, to }: { from: string; to: string }) {
         <span className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground">{status}</span>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           {statTiles.map((tile) => (
             <div key={tile.label} className="rounded-md border border-border bg-background p-3">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">{tile.label}</p>
@@ -88,7 +115,7 @@ export function ClockCard({ from, to }: { from: string; to: string }) {
           ))}
         </div>
 
-        <div className="hidden space-y-2 sm:block">
+        <div className="space-y-2">
           <h4 className="text-sm font-semibold text-foreground">Daily hours in selected range</h4>
           <div className="overflow-x-auto rounded-md border border-border bg-background p-3">
             <div className="flex min-w-max items-end gap-2">
@@ -120,32 +147,49 @@ export function ClockCard({ from, to }: { from: string; to: string }) {
         </div>
 
         <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-foreground">Monthly hours</h4>
-          <div className="grid gap-2 sm:hidden">
-            {monthlyRows.map((row) => (
-              <div key={row.month} className="rounded-lg border border-border bg-background p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {format(new Date(`${row.month}-01T00:00:00.000Z`), "MMMM yyyy")}
-                </p>
-                <p className="mt-1 text-base font-semibold text-foreground">{formatMinutes(row.workedMinutes)}</p>
-              </div>
-            ))}
+          <div className="flex items-center justify-between gap-3">
+            <h4 className="text-sm font-semibold text-foreground">Planned days off</h4>
+            <Link href={timeOffRoute} className="text-xs font-semibold text-primary hover:underline">
+              Manage time off
+            </Link>
           </div>
-          <div className="hidden overflow-x-auto rounded-md border border-border bg-background sm:block">
-            <div className="min-w-[320px]">
-              <div className="grid grid-cols-2 border-b border-border px-3 py-2 text-xs uppercase tracking-wide text-muted-foreground">
-                <span>Month</span>
-                <span className="text-right">Total worked</span>
-              </div>
-              {monthlyRows.map((row) => (
-                <div key={row.month} className="grid grid-cols-2 px-3 py-2 text-sm">
-                  <span className="font-medium text-foreground">
-                    {format(new Date(`${row.month}-01T00:00:00.000Z`), "MMMM yyyy")}
+          <div className="space-y-2 rounded-md border border-border bg-background p-3">
+            {plannedDaysOff.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No planned days off saved for this week.</p>
+            ) : (
+              plannedDaysOff.map((entry) => (
+                <div key={entry.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{formatDateOnly(entry.date, "EEEE, MMM d")}</p>
+                    <p className="text-xs text-muted-foreground">{timeOffLabel(entry.type)}</p>
+                  </div>
+                  <span className="rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-accent-foreground">
+                    {timeOffLabel(entry.type)}
                   </span>
-                  <span className="text-right font-semibold text-foreground">{formatMinutes(row.workedMinutes)}</span>
                 </div>
-              ))}
-            </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h4 className="text-sm font-semibold text-foreground">Public holidays</h4>
+          <div className="space-y-2 rounded-md border border-border bg-background p-3">
+            {publicHolidays.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No public holidays fall within the current week.</p>
+            ) : (
+              publicHolidays.map((holiday) => (
+                <div key={holiday.date} className="flex items-center justify-between gap-3 rounded-lg border border-success/20 bg-success/5 px-3 py-2.5">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{formatDateOnly(holiday.date, "EEEE, MMM d")}</p>
+                    <p className="text-xs text-muted-foreground">{holiday.name}</p>
+                  </div>
+                  <span className="rounded-full bg-success px-2.5 py-1 text-xs font-semibold text-success-foreground">
+                    Public holiday
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </CardContent>

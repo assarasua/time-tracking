@@ -91,6 +91,17 @@ export interface UserPreferenceTable {
   updatedAt: ColumnType<Date, Date | string | undefined, Date | string | undefined>;
 }
 
+export interface TimeOffEntryTable {
+  id: string;
+  organizationId: string;
+  organizationUserId: string;
+  date: ColumnType<Date, Date | string, Date | string>;
+  type: string;
+  status: string;
+  createdAt: ColumnType<Date, Date | string | undefined, never>;
+  updatedAt: ColumnType<Date, Date | string | undefined, Date | string | undefined>;
+}
+
 export interface Database {
   Organization: OrganizationTable;
   User: UserTable;
@@ -100,4 +111,5 @@ export interface Database {
   AuditLog: AuditLogTable;
   AppSession: AppSessionTable;
   UserPreference: UserPreferenceTable;
+  TimeOffEntry: TimeOffEntryTable;
 }

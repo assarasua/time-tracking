@@ -29,3 +29,16 @@ export const exportQuerySchema = z.object({
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   membership_id: z.string().min(1).optional()
 });
+
+export const timeOffQuerySchema = rangeQuerySchema;
+
+export const createTimeOffSchema = z.object({
+  entries: z
+    .array(
+      z.object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        type: z.enum(["vacation", "unpaid_leave", "not_working"])
+      })
+    )
+    .min(1)
+});

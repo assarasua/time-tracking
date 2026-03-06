@@ -1,6 +1,7 @@
-import { eachDayOfInterval, eachMonthOfInterval, format, parseISO } from "date-fns";
+import { eachDayOfInterval, eachMonthOfInterval, endOfYear, format, parseISO, startOfYear } from "date-fns";
 
 import { db } from "@/lib/db";
+import { getMembershipTimeOffEntries } from "@/lib/time-off";
 import { calculateEffectiveWorkedMinutes } from "@/lib/time";
 
 export function normalizeRange(from: string, to: string) {
@@ -30,28 +31,37 @@ export async function getMeRangeSummaryData(params: {
   to: string;
 }) {
   const range = normalizeRange(params.from, params.to);
-  const sessions = await db.timeSession.findMany({
-    where: {
-      organizationUserId: params.membershipId,
-      startAt: {
-        gte: range.fromDate,
-        lte: range.toDate
+  const annualFrom = format(startOfYear(new Date()), "yyyy-MM-dd");
+  const annualTo = format(endOfYear(new Date()), "yyyy-MM-dd");
+  const [sessions, annualTimeOffEntries] = await Promise.all([
+    db.timeSession.findMany({
+      where: {
+        organizationUserId: params.membershipId,
+        startAt: {
+          gte: range.fromDate,
+          lte: range.toDate
+        },
+        endAt: {
+          not: null
+        }
       },
-      endAt: {
-        not: null
+      orderBy: {
+        startAt: "asc"
+      },
+      select: {
+        id: true,
+        startAt: true,
+        endAt: true,
+        createdAt: true,
+        updatedAt: true
       }
-    },
-    orderBy: {
-      startAt: "asc"
-    },
-    select: {
-      id: true,
-      startAt: true,
-      endAt: true,
-      createdAt: true,
-      updatedAt: true
-    }
-  });
+    }),
+    getMembershipTimeOffEntries({
+      organizationUserId: params.membershipId,
+      from: annualFrom,
+      to: annualTo
+    })
+  ]);
 
   const effectiveWorked = calculateEffectiveWorkedMinutes({
     sessions: sessions as any[],
@@ -98,6 +108,7 @@ export async function getMeRangeSummaryData(params: {
     workedMinutes,
     expectedMinutes,
     varianceMinutes: workedMinutes - expectedMinutes,
+    annualTimeOffDays: annualTimeOffEntries.length,
     daily,
     monthly
   };

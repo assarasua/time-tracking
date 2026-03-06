@@ -28,6 +28,7 @@ model Organization {
   memberships   OrganizationUser[]
   weekLocks     WeekLock[]
   appSessions   AppSession[]
+  timeOffEntries TimeOffEntry[]
 }
 
 model User {
@@ -60,6 +61,7 @@ model OrganizationUser {
   organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   timeSessions       TimeSession[]
+  timeOffEntries     TimeOffEntry[]
 
   @@unique([organizationId, userId])
   @@index([organizationId, role])
@@ -136,4 +138,20 @@ model UserPreference {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TimeOffEntry {
+  id                 String           @id @default(cuid())
+  organizationId     String
+  organizationUserId String
+  date               DateTime
+  type               String
+  status             String
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  organization       Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationUser   OrganizationUser @relation(fields: [organizationUserId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationUserId, date])
+  @@index([organizationId, date])
 }
