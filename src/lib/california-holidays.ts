@@ -5,10 +5,6 @@ export type CaliforniaHoliday = {
   name: string;
 };
 
-function toDateKey(year: number, monthIndex: number, day: number) {
-  return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
 function dateToUtcKey(date: Date) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
@@ -78,12 +74,4 @@ export function getCaliforniaPublicHolidays(from: string, to: string) {
 
 export function getCaliforniaPublicHolidaysByDate(from: string, to: string) {
   return new Map(getCaliforniaPublicHolidays(from, to).map((holiday) => [holiday.date, holiday]));
-}
-
-export function isCaliforniaPublicHoliday(date: string, from: string, to: string) {
-  return getCaliforniaPublicHolidaysByDate(from, to).has(date);
-}
-
-export function formatCaliforniaHolidayKey(year: number, monthIndex: number, day: number) {
-  return toDateKey(year, monthIndex, day);
 }

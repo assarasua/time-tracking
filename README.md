@@ -1,69 +1,201 @@
 # Hutech Time Tracking
 
-Production-ready single-company time tracking app with Google OAuth, custom app sessions, PostgreSQL persistence, real-time timesheet updates, timezone profile settings, admin controls, and payroll CSV exports.
+Esto es una app de control horario para una sola empresa.
 
-## 1. What This App Does
+Sirve para 4 cosas principales:
+- fichar entrada y salida
+- añadir horas manualmente
+- pedir días libres
+- revisar horas y exportarlas desde admin
 
-### Employee outcomes
-- Sign in with Google and access the workspace.
-- Use a single **Clock in / Clock out** button in Timesheet.
-- Add manual hours by day (with policy constraints).
-- See worked/expected/variance by selected date range.
-- Review day sessions in local selected profile timezone.
+No hace falta leer el código para entenderla. Este README explica qué hace el producto, qué reglas tiene y dónde está cada parte.
 
-### Admin outcomes
-- View people and role status.
-- Review employee daily/range totals.
-- Update member status and weekly target.
-- Lock/unlock weeks.
-- Export monthly payroll CSV by selected date range (single employee or all employees).
+## Qué ve cada usuario
 
-## 2. Core UX Improvements Implemented
+### Empleado
+Puede:
+- entrar con Google
+- ir directo a `Timesheet` después del login
+- usar un solo botón para `Clock in` y `Clock out`
+- ver el contador en vivo mientras está fichado
+- añadir horas manuales
+- ver sesiones por día
+- elegir su zona horaria desde el perfil
+- pedir días libres desde `Time off`
 
-- **Default post-login page is Timesheet**.
-- **Single toggle clock action** in Timesheet (`Clock in` / `Clock out`) with live running timer.
-- **Real-time refresh** for timesheet changes via server push stream (`/api/realtime/stream`).
-- **Auto-open sessions** after saving manual hours.
-- **Manual time input supports both typing and suggested 15-min slots**.
-- **Override flow with confirmation modal** when manual range overlaps existing session.
-- On confirmed override, previous overlapping records are deleted and audit-logged.
-- **Add hours policy is enforced in UI + API**:
-  - no future dates,
-  - no dates older than 7 days from current day.
-- **Profile timezone settings moved to top bar** (click avatar/name opens modal settings).
-- Timezone choices are constrained to:
-  - Madrid (CET/CEST)
-  - New York (ET)
-  - Los Angeles (PT)
-  - Manila (PHT)
-- Org default timezone set to **America/Los_Angeles**.
-- Dashboard includes **daily-hours chart** for selected range (desktop/tablet only, hidden on mobile).
+### Admin
+Puede:
+- ver todas las personas
+- ver horas por empleado en un rango
+- ver días libres solicitados por empleado
+- descargar CSV mensual por persona o de toda la empresa
+- usar la sección `Admin` separada del resto de navegación
 
-## 3. Tech Stack
+## Cómo funciona cada pantalla
 
-- **App**: Next.js 15 (App Router), React 19, TypeScript
-- **Styling**: TailwindCSS with HuTech tokenized design patterns
-- **Runtime DB access**: Kysely + `pg`
-- **Schema tooling**: Prisma schema/seed (Prisma client package still present)
-- **Auth**: Custom Google OAuth + server-managed HttpOnly sessions
-- **Email**: Resend (reminder jobs)
+### 1. Dashboard
+El dashboard ahora está simplificado.
 
-## 4. Authentication and Sessions
+Muestra solo el resumen de la semana actual:
+- horas trabajadas
+- horas esperadas
+- diferencia
+- días libres del año
+- gráfico diario de horas, también en móvil
+- días libres planeados para esta semana
+- festivos públicos de esta semana
 
-### Flow
-1. `GET /api/auth/google/start` creates OAuth state + redirects to Google.
-2. `GET /api/auth/google/callback` validates state, exchanges token, fetches profile, provisions user/membership, creates app session.
-3. Session cookie: `tt_session` (HttpOnly, SameSite=Lax, Secure on HTTPS).
+No tiene filtro manual.
+Siempre enseña la semana actual.
 
-### Provisioning rules
-- New users are provisioned automatically on first valid Google login.
-- Forced admin emails are supported in provisioning logic.
+### 2. Timesheet
+Es la pantalla principal.
 
-### Session storage
-- `AppSession` table stores token hash, expiry, and revocation metadata.
+Tiene:
+- botón único `Clock in / Clock out`
+- contador vivo mientras la sesión está abierta
+- vista por días
+- sesiones del día
+- añadir horas manuales
+- refresco en tiempo real cuando cambian las sesiones
 
-## 5. Data Model (Active)
+Comportamiento importante:
+- al guardar horas manuales se abren automáticamente las sesiones del día
+- si una nueva sesión pisa otra anterior, se puede sobreescribir
+- al confirmar el override, se borran las sesiones solapadas antiguas y queda la nueva
 
+### 3. Time off
+Sirve para marcar días completos libres.
+
+Tipos permitidos:
+- Vacation
+- Unpaid leave
+- Not working
+
+No permite:
+- días pasados
+- fines de semana
+- festivos públicos de California
+
+En móvil ya no usa un calendario comprimido de 7 columnas.
+Ahora usa una lista vertical por día, mucho más clara.
+En desktop sigue usando el calendario clásico.
+
+Además:
+- los festivos públicos se generan automáticamente en código
+- no se guardan en base de datos
+- se muestran en el calendario como `Public holiday`
+- por ejemplo: `Cesar Chavez Day` el 31 de marzo
+
+### 4. Admin
+La navegación `Admin` está separada visualmente del resto y usa otro color.
+
+La pantalla tiene estas secciones:
+- `Monthly Employee hours report`
+- `People`
+- `Monthly Hours export`
+- `Time off`
+
+#### Monthly Employee hours report
+- usa su propio filtro visual
+- ese filtro solo afecta a este bloque
+- enseña horas por empleado y por día
+
+#### People
+- lista de personas
+- rol
+- descarga de CSV mensual por persona
+
+#### Monthly Hours export
+- descarga CSV mensual de toda la empresa
+
+#### Time off
+- va al final del panel
+- muestra días solicitados por empleado
+- tiene su propio filtro separado del filtro de horas
+- por defecto usa el año actual
+- permite abrir modal con el detalle exacto de fechas
+
+## Reglas importantes del producto
+
+### Fichaje
+- solo puede haber una sesión activa por usuario
+- `Clock in` abre la sesión
+- `Clock out` la cierra
+- el tiempo se actualiza en vivo
+
+### Añadir horas manuales
+- no se puede añadir en fechas futuras
+- no se puede añadir en fechas con más de 7 días de antigüedad
+- si hay solape, se puede sobreescribir
+- al sobreescribir, se elimina el registro anterior que se solapa
+
+### Estado del día
+- `Complete` si hay 8 horas o más
+- `Partial` si hay más de 0 y menos de 8 horas
+
+### Días libres
+- solo son días completos
+- no hay medias jornadas
+- no hay aprobación manual en esta versión
+- se consideran auto-aprobados
+- no se puede pedir:
+  - un día pasado
+  - un fin de semana
+  - un festivo público
+
+## Zonas horarias
+
+Cada usuario puede elegir su zona horaria desde el perfil.
+Se abre haciendo click en el nombre o avatar en la barra superior.
+
+Opciones disponibles:
+- Madrid (CET/CEST)
+- New York (ET)
+- Los Angeles (PT)
+- Manila (PHT)
+
+Importante:
+- la organización por defecto usa `America/Los_Angeles`
+- las sesiones con hora sí usan timezone
+- los días libres no usan hora; son fechas puras (`date-only`)
+- por eso un día libre no debe moverse de 11 a 10 por timezone
+
+## Autenticación
+
+La app no usa NextAuth.
+Usa auth propia con Google OAuth y sesiones en base de datos.
+
+Flujo:
+1. el usuario pulsa login con Google
+2. Google devuelve el callback
+3. la app crea o reutiliza el usuario
+4. se crea una sesión propia en cookie `tt_session`
+
+## Festivos públicos
+
+Los festivos públicos de California:
+- no están guardados en la base de datos
+- se generan por código en runtime
+- están definidos en:
+  - [src/lib/california-holidays.ts](/Users/axi/Documents/time-tracking/src/lib/california-holidays.ts)
+
+Ejemplos incluidos:
+- New Year's Day
+- Martin Luther King Jr. Day
+- Presidents' Day
+- Cesar Chavez Day
+- Memorial Day
+- Independence Day
+- Labor Day
+- Veterans Day
+- Thanksgiving Day
+- Day after Thanksgiving
+- Christmas Day
+
+## Base de datos
+
+### Tablas que importan ahora
 - `Organization`
 - `User`
 - `OrganizationUser`
@@ -71,41 +203,18 @@ Production-ready single-company time tracking app with Google OAuth, custom app 
 - `WeekLock`
 - `AuditLog`
 - `AppSession`
-- `UserPreference` (profile timezone)
+- `UserPreference`
+- `TimeOffEntry`
 
-## 6. Business Rules
+### Qué guarda cada una
+- `User`: persona real
+- `OrganizationUser`: relación persona-empresa + rol + objetivo semanal
+- `TimeSession`: sesiones de trabajo
+- `AppSession`: login persistente propio de la app
+- `UserPreference`: zona horaria del usuario
+- `TimeOffEntry`: días libres guardados por usuario
 
-### Manual add-hours (`POST /api/time-sessions`)
-- `endAt` must be after `startAt`.
-- Not allowed for future dates.
-- Not allowed if target day is older than 7 days from now.
-- Non-admins cannot add hours in locked weeks.
-- Overlap behavior:
-  - prompts confirmation in UI,
-  - creates new session,
-  - deletes previous overlapping sessions,
-  - logs override in `AuditLog`.
-
-### Edit existing session (`PATCH /api/time-sessions/{id}`)
-- Same 7-day historical restriction for non-admins.
-- Enforces week-lock policy for non-admins.
-
-### Daily completion status
-- `Complete` when day total >= **8h (480m)**.
-- `Partial` when day total > 0 and < 8h.
-
-## 7. Real-Time Updates
-
-This app uses a server push stream (SSE) to propagate session changes instantly.
-
-- Stream endpoint: `GET /api/realtime/stream`
-- Publisher events on:
-  - `POST /api/time-sessions`
-  - `POST /api/time-sessions/start`
-  - `POST /api/time-sessions/{id}/stop`
-- Timesheet subscribes with `EventSource` and reloads selected range on `time_session_changed`.
-
-## 8. API Surface
+## API importante
 
 ### Auth
 - `GET /api/auth/google/start`
@@ -113,26 +222,28 @@ This app uses a server push stream (SSE) to propagate session changes instantly.
 - `POST /api/auth/logout`
 - `GET /api/auth/session`
 - `GET /api/auth/diagnostics`
-- `GET /api/auth/error`
 
-### Profile
+### Perfil
 - `GET /api/me/profile`
 - `PATCH /api/me/profile`
 
-### User summaries
+### Horas usuario
+- `GET /api/me/range-summary?from=YYYY-MM-DD&to=YYYY-MM-DD`
 - `GET /api/me/week-summary?week_start=YYYY-MM-DD`
 - `GET /api/me/month-summary?month=YYYY-MM`
-- `GET /api/me/range-summary?from=YYYY-MM-DD&to=YYYY-MM-DD`
 
-### Time sessions
+### Sesiones
 - `GET /api/time-sessions/active`
 - `POST /api/time-sessions/start`
 - `POST /api/time-sessions/{id}/stop`
 - `POST /api/time-sessions`
 - `PATCH /api/time-sessions/{id}`
 
-### Realtime
-- `GET /api/realtime/stream`
+### Time off
+- `GET /api/time-off?from=YYYY-MM-DD&to=YYYY-MM-DD`
+- `POST /api/time-off`
+- `DELETE /api/time-off/{id}`
+- `GET /api/admin/time-off?from=YYYY-MM-DD&to=YYYY-MM-DD`
 
 ### Admin
 - `GET /api/admin/range-overview?from=YYYY-MM-DD&to=YYYY-MM-DD`
@@ -141,121 +252,146 @@ This app uses a server push stream (SSE) to propagate session changes instantly.
 - `POST /api/weeks/{weekStart}/lock`
 - `POST /api/weeks/{weekStart}/unlock`
 
-### Exports
+### Export
 - `GET /api/exports/payroll.csv?from=YYYY-MM-DD&to=YYYY-MM-DD`
 - `GET /api/exports/payroll.csv?from=YYYY-MM-DD&to=YYYY-MM-DD&membership_id=<id>`
 
-### Jobs
-- `POST /api/jobs/auto-lock`
-- `POST /api/jobs/reminders`
+## Tecnología
 
-## 9. CSV Export Behavior
+- Next.js 15
+- React 19
+- TypeScript
+- Tailwind CSS
+- Kysely
+- PostgreSQL
+- Prisma para schema/migrations
+- Google OAuth custom
+- SSE para refresco en tiempo real
 
-- Export is monthly-aggregated within selected range.
-- Per-person file:
-  - `<employee-name>-YYYY-MM-DD-to-YYYY-MM-DD.csv`
-- All employees file:
-  - `hutech-YYYY-MM-DD-to-YYYY-MM-DD-monthly.csv`
+## Tiempo real
 
-## 10. Environment Variables
+La app usa un stream tipo SSE para refrescar cambios de sesiones sin recargar.
 
-### Required
+Endpoint:
+- `GET /api/realtime/stream`
+
+Se usa sobre todo en `Timesheet`.
+
+## Variables de entorno
+
+### Obligatorias
 - `DATABASE_URL`
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `AUTH_SECRET`
 
-### Recommended
+### Recomendadas
 - `APP_BASE_URL`
 - `AUTH_TRUST_HOST=true`
 - `EMAIL_API_KEY`
 - `EMAIL_FROM_ADDRESS`
 - `CRON_SECRET`
 
-Use `.env.example` as base.
-
-## 11. Local Development
+## Levantar en local
 
 ```bash
 npm install
 cp .env.example .env.local
 npm run prisma:deploy
-npm run dev -- --port 3000
+npm run dev
 ```
 
-Open: `http://localhost:3000`
+Abrir:
+- [http://localhost:3000](http://localhost:3000)
 
-Optional seed:
+## Comandos útiles
 
 ```bash
+npm run dev
+npm run build
+npm run typecheck
+npm run prisma:deploy
 npm run prisma:seed
 ```
 
-## 12. Build and Quality
+## Deploy en Railway
 
-```bash
-npm run typecheck
-npm run build
-```
-
-## 13. Deploy (Railway Node)
-
-### Build command
+Build:
 
 ```bash
 npm ci --include=dev && npx prisma migrate deploy && npm run build
 ```
 
-### Start command
+Start:
 
 ```bash
 npm run start
 ```
 
-### Deploy notes
-- Keep runtime on Railway Node (not edge runtime for DB code).
-- Ensure production domain matches Google callback URL:
+## Si algo falla
+
+### Login Google falla
+Revisar:
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `AUTH_SECRET`
+- `APP_BASE_URL`
+- callback exacta:
   - `<APP_BASE_URL>/api/auth/google/callback`
-- If using proxy/CDN, forward host/proto correctly.
 
-## 14. Troubleshooting
+### La base de datos no conecta
+Revisar:
+- `DATABASE_URL`
+- SSL
+- que Railway esté accesible desde el runtime
 
-### OAuth / login
-- `oauth_provider_misconfigured`:
-  - verify Google client ID/secret and callback URL.
-- `oauth_state_invalid`:
-  - host/proto mismatch, stale cookies, or wrong `APP_BASE_URL`.
-
-### DB connectivity
-- `db_unreachable`:
-  - DB host/port not reachable from runtime.
-- `db_auth_failed`:
-  - invalid credentials.
-- `db_schema_missing`:
-  - run `npx prisma migrate deploy`.
-
-### Frontend stale bundle error
-- `__webpack_modules__[moduleId] is not a function`
+### El frontend va raro o sale un error de webpack
+Haz esto:
 
 ```bash
 rm -rf .next
-npm run dev -- --port 3000
+npm run dev
 ```
 
-Hard refresh browser afterward.
+## Mapa de carpetas
 
-## 15. Security Notes
+- [src/app](/Users/axi/Documents/time-tracking/src/app): páginas y rutas API
+- [src/components](/Users/axi/Documents/time-tracking/src/components): componentes UI
+- [src/lib](/Users/axi/Documents/time-tracking/src/lib): auth, db, reglas de negocio, utilidades
+- [prisma/schema.prisma](/Users/axi/Documents/time-tracking/prisma/schema.prisma): schema de referencia
+- [prisma/seed.mjs](/Users/axi/Documents/time-tracking/prisma/seed.mjs): seed local
 
-- Never commit secrets.
-- Use environment variables per environment.
-- Keep `AUTH_SECRET` high entropy and rotate as needed.
-- Enforce HTTPS in production.
+## Dónde tocar cada cosa
 
-## 16. Repository Map
+### Si quieres cambiar login o sesiones
+Mira:
+- [src/lib/auth](/Users/axi/Documents/time-tracking/src/lib/auth)
+- [src/app/api/auth](/Users/axi/Documents/time-tracking/src/app/api/auth)
 
-- `src/app/` routes and API handlers
-- `src/components/` UI and interaction components
-- `src/lib/` auth, db, realtime, aggregates, utilities
-- `prisma/schema.prisma` schema reference
-- `prisma/seed.mjs` seed script
+### Si quieres cambiar Timesheet
+Mira:
+- [src/components/timesheet-board.tsx](/Users/axi/Documents/time-tracking/src/components/timesheet-board.tsx)
+- [src/app/api/time-sessions](/Users/axi/Documents/time-tracking/src/app/api/time-sessions)
 
+### Si quieres cambiar Time off
+Mira:
+- [src/components/time-off-board.tsx](/Users/axi/Documents/time-tracking/src/components/time-off-board.tsx)
+- [src/lib/time-off.ts](/Users/axi/Documents/time-tracking/src/lib/time-off.ts)
+- [src/lib/california-holidays.ts](/Users/axi/Documents/time-tracking/src/lib/california-holidays.ts)
+- [src/app/api/time-off](/Users/axi/Documents/time-tracking/src/app/api/time-off)
+
+### Si quieres cambiar Admin
+Mira:
+- [src/app/admin/page.tsx](/Users/axi/Documents/time-tracking/src/app/admin/page.tsx)
+- [src/components/admin-time-off-summary.tsx](/Users/axi/Documents/time-tracking/src/components/admin-time-off-summary.tsx)
+
+## Resumen corto
+
+Si no quieres leer todo:
+- `Timesheet` es la pantalla principal
+- `Dashboard` enseña la semana actual
+- `Time off` sirve para pedir días completos
+- `Admin` sirve para revisar horas, personas y exportes
+- los festivos públicos vienen de código, no de base de datos
+- los días libres no usan timezone
+- las sesiones con hora sí usan timezone

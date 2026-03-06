@@ -9,6 +9,16 @@ export type DateRange = {
   to: string;
 };
 
+export function resolveRequestedRange(
+  from: string | undefined,
+  to: string | undefined,
+  fallback: DateRange
+) {
+  return DATE_RE.test(from ?? "") || DATE_RE.test(to ?? "")
+    ? normalizeRange(from ?? fallback.from, to ?? fallback.to)
+    : fallback;
+}
+
 function toDateOnly(value: Date) {
   return formatISO(value, { representation: "date" });
 }

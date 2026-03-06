@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Role } from "@/lib/db/schema";
-import { DATE_RE, getCurrentWeekRange, normalizeRange } from "@/lib/date-range";
+import { getCurrentWeekRange, resolveRequestedRange } from "@/lib/date-range";
 
 type SearchParams = Promise<{ from?: string; to?: string }>;
 
@@ -39,9 +39,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
   const weekStartDay = organization?.weekStartDay ?? 1;
   const normalizedWeekStart = weekStartDay as 0 | 1 | 2 | 3 | 4 | 5 | 6;
   const fallback = getCurrentWeekRange(normalizedWeekStart);
-  const selected = DATE_RE.test(params.from ?? "") || DATE_RE.test(params.to ?? "")
-    ? normalizeRange(params.from ?? fallback.from, params.to ?? fallback.to)
-    : fallback;
+  const selected = resolveRequestedRange(params.from, params.to, fallback);
   const selectedFrom = selected.from;
   const selectedTo = selected.to;
   const currentMonth = new Date();

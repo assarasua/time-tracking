@@ -126,6 +126,18 @@ function typeMeta(type: TimeOffType) {
   return TYPE_OPTIONS.find((option) => option.value === type) ?? TYPE_OPTIONS[0];
 }
 
+type DayState = {
+  dayKey: string;
+  entryType?: TimeOffType;
+  saved: boolean;
+  holidayName?: string;
+  inVisibleMonth: boolean;
+  isPastDay: boolean;
+  isWeekend: boolean;
+  isBlockedDay: boolean;
+  meta: ReturnType<typeof typeMeta> | null;
+};
+
 export function TimeOffBoard() {
   const current = getPresetRange("current");
   const [selectedFrom, setSelectedFrom] = useState(current.from);
@@ -320,6 +332,26 @@ export function TimeOffBoard() {
     setMode(detectMode(selectedFrom, selectedTo));
   }, [selectedFrom, selectedTo]);
 
+  function getDayState(day: Date): DayState {
+    const dayKey = format(day, "yyyy-MM-dd");
+    const entryType = draftEntries.get(dayKey);
+    const systemHoliday = californiaHolidays.get(dayKey);
+    const isPastDay = dayKey < todayKey;
+    const isWeekend = [0, 6].includes(day.getDay());
+
+    return {
+      dayKey,
+      entryType,
+      saved: savedByDate.has(dayKey),
+      holidayName: systemHoliday?.name,
+      inVisibleMonth: isSameMonth(day, visibleMonth),
+      isPastDay,
+      isWeekend,
+      isBlockedDay: isPastDay || Boolean(systemHoliday) || isWeekend,
+      meta: entryType ? typeMeta(entryType) : null
+    };
+  }
+
   return (
     <div className="space-y-5">
       <p className="sr-only" aria-live="polite">
@@ -481,62 +513,54 @@ export function TimeOffBoard() {
 
           <div className="space-y-2 sm:hidden">
             {visibleMonthDays.map((day) => {
-              const dayKey = format(day, "yyyy-MM-dd");
-              const entryType = draftEntries.get(dayKey);
-              const savedEntry = savedByDate.get(dayKey);
-              const systemHoliday = californiaHolidays.get(dayKey);
-              const meta = entryType ? typeMeta(entryType) : null;
-              const isSystemHoliday = Boolean(systemHoliday);
-              const isPastDay = dayKey < todayKey;
-              const isWeekend = [0, 6].includes(day.getDay());
-              const isBlockedDay = isPastDay || isSystemHoliday || isWeekend;
+              const state = getDayState(day);
 
               return (
                 <button
-                  key={`mobile-${dayKey}`}
+                  key={`mobile-${state.dayKey}`}
                   type="button"
-                  onClick={() => toggleDate(dayKey)}
-                  disabled={isBlockedDay}
+                  onClick={() => toggleDate(state.dayKey)}
+                  disabled={state.isBlockedDay}
                   className={cn(
                     "w-full rounded-2xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                     "bg-background",
-                    entryType && meta?.calendarClass,
-                    entryType && meta?.calendarTextClass,
-                    isSystemHoliday && "border-success/40 bg-success/10",
-                    isPastDay && "cursor-not-allowed border-border/60 bg-muted/50 text-muted-foreground opacity-70",
-                    isWeekend && !isSystemHoliday && "cursor-not-allowed border-border/60 bg-muted/40 text-muted-foreground opacity-80"
+                    state.entryType && state.meta?.calendarClass,
+                    state.entryType && state.meta?.calendarTextClass,
+                    state.holidayName && "border-success/40 bg-success/10",
+                    state.isPastDay && "cursor-not-allowed border-border/60 bg-muted/50 text-muted-foreground opacity-70",
+                    state.isWeekend && !state.holidayName && "cursor-not-allowed border-border/60 bg-muted/40 text-muted-foreground opacity-80"
                   )}
-                  aria-pressed={Boolean(entryType)}
-                  aria-label={`${dayKey}${entryType ? `, ${meta?.label}` : ""}${isSystemHoliday ? `, California public holiday ${systemHoliday?.name}` : ""}${savedEntry ? ", saved" : ""}`}
+                  aria-pressed={Boolean(state.entryType)}
+                  aria-label={`${state.dayKey}${state.entryType ? `, ${state.meta?.label}` : ""}${state.holidayName ? `, California public holiday ${state.holidayName}` : ""}${state.saved ? ", saved" : ""}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-foreground">{format(day, "EEEE, MMM d")}</p>
-                      <p className="text-xs text-muted-foreground">{dayKey}</p>
+                      <p className="text-xs text-muted-foreground">{state.dayKey}</p>
                     </div>
-                    {isSystemHoliday ? (
+                    {state.holidayName ? (
                       <span className="rounded-full bg-success px-2.5 py-1 text-[11px] font-semibold text-success-foreground">Public holiday</span>
-                    ) : savedEntry ? (
+                    ) : state.saved ? (
                       <span className="rounded-full bg-success px-2.5 py-1 text-[11px] font-semibold text-success-foreground">Saved</span>
                     ) : null}
                   </div>
                   <div className="mt-3 space-y-1">
-                    {isSystemHoliday ? (
+                    {state.holidayName ? (
                       <>
-                        <p className="text-sm font-semibold text-foreground">{systemHoliday?.name}</p>
+                        <p className="text-sm font-semibold text-foreground">{state.holidayName}</p>
                         <p className="text-xs text-muted-foreground">California public holiday</p>
                       </>
-                    ) : entryType ? (
+                    ) : state.entryType ? (
                       <>
-                        <span className={cn("inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold", meta?.chipClass)}>{meta?.label}</span>
-                        <p className="text-xs text-muted-foreground">{meta?.hint}</p>
+                        <span className={cn("inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold", state.meta?.chipClass)}>{state.meta?.label}</span>
+                        <p className="text-xs text-muted-foreground">{state.meta?.hint}</p>
                       </>
-                    ) : isWeekend ? (
+                    ) : state.isWeekend ? (
                       <>
                         <span className="inline-flex rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-foreground">Weekend</span>
                         <p className="text-xs text-muted-foreground">Not selectable</p>
                       </>
-                    ) : isPastDay ? (
+                    ) : state.isPastDay ? (
                       <p className="text-xs text-muted-foreground">Past day</p>
                     ) : (
                       <p className="text-xs text-muted-foreground">Tap to assign {typeMeta(activeType).label.toLowerCase()}</p>
@@ -549,71 +573,62 @@ export function TimeOffBoard() {
 
           <div className="hidden grid-cols-7 gap-2 sm:grid">
             {calendarDays.map((day) => {
-              const dayKey = format(day, "yyyy-MM-dd");
-              const entryType = draftEntries.get(dayKey);
-              const savedEntry = savedByDate.get(dayKey);
-              const systemHoliday = californiaHolidays.get(dayKey);
-              const inVisibleMonth = isSameMonth(day, visibleMonth);
-              const meta = entryType ? typeMeta(entryType) : null;
-              const isSystemHoliday = Boolean(systemHoliday);
-              const isPastDay = dayKey < todayKey;
-              const isWeekend = [0, 6].includes(day.getDay());
-              const isBlockedDay = isPastDay || isSystemHoliday || isWeekend;
+              const state = getDayState(day);
 
               return (
                 <button
-                  key={dayKey}
+                  key={state.dayKey}
                   type="button"
-                  onClick={() => toggleDate(dayKey)}
-                  disabled={isBlockedDay}
+                  onClick={() => toggleDate(state.dayKey)}
+                  disabled={state.isBlockedDay}
                   className={cn(
                     "min-h-[104px] rounded-2xl border p-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                    inVisibleMonth ? "border-border bg-background" : "border-border/60 bg-muted/30 text-muted-foreground",
-                    entryType && meta?.calendarClass,
-                    entryType && meta?.calendarTextClass,
-                    entryType && "shadow-sm",
-                    isSystemHoliday && "border-success/40 bg-success/10",
-                    isToday(day) && !entryType && "ring-1 ring-primary/40",
-                    isPastDay && "cursor-not-allowed border-border/60 bg-muted/50 text-muted-foreground opacity-70",
-                    isWeekend && !isSystemHoliday && "cursor-not-allowed border-border/60 bg-muted/40 text-muted-foreground opacity-80",
-                    isBlockedDay && "pointer-events-none"
+                    state.inVisibleMonth ? "border-border bg-background" : "border-border/60 bg-muted/30 text-muted-foreground",
+                    state.entryType && state.meta?.calendarClass,
+                    state.entryType && state.meta?.calendarTextClass,
+                    state.entryType && "shadow-sm",
+                    state.holidayName && "border-success/40 bg-success/10",
+                    isToday(day) && !state.entryType && "ring-1 ring-primary/40",
+                    state.isPastDay && "cursor-not-allowed border-border/60 bg-muted/50 text-muted-foreground opacity-70",
+                    state.isWeekend && !state.holidayName && "cursor-not-allowed border-border/60 bg-muted/40 text-muted-foreground opacity-80",
+                    state.isBlockedDay && "pointer-events-none"
                   )}
-                  aria-pressed={Boolean(entryType)}
-                  aria-label={`${dayKey}${entryType ? `, ${meta?.label}` : ""}${isSystemHoliday ? `, California public holiday ${systemHoliday?.name}` : ""}${savedEntry ? ", saved" : ""}`}
+                  aria-pressed={Boolean(state.entryType)}
+                  aria-label={`${state.dayKey}${state.entryType ? `, ${state.meta?.label}` : ""}${state.holidayName ? `, California public holiday ${state.holidayName}` : ""}${state.saved ? ", saved" : ""}`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="text-sm font-semibold">{format(day, "d")}</span>
-                    {isSystemHoliday ? (
+                    {state.holidayName ? (
                       <span className="rounded-full bg-success px-2 py-0.5 text-[10px] font-semibold text-success-foreground">
                         Public holiday
                       </span>
-                    ) : savedEntry ? (
+                    ) : state.saved ? (
                       <span className="rounded-full bg-success px-2 py-0.5 text-[10px] font-semibold text-success-foreground">
                         Saved
                       </span>
                     ) : null}
                   </div>
                   <div className="mt-4 space-y-1">
-                    {isSystemHoliday ? (
+                    {state.holidayName ? (
                       <>
-                        <p className="text-[11px] font-semibold leading-4 text-foreground">{systemHoliday?.name}</p>
+                        <p className="text-[11px] font-semibold leading-4 text-foreground">{state.holidayName}</p>
                         <p className="text-[10px] leading-4 text-muted-foreground">California public holiday</p>
                       </>
-                    ) : entryType ? (
+                    ) : state.entryType ? (
                       <>
-                        <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold", meta?.chipClass)}>
-                          {meta?.label}
+                        <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold", state.meta?.chipClass)}>
+                          {state.meta?.label}
                         </span>
-                        <p className={cn("text-[11px] leading-4", entryType ? "text-foreground/80" : "text-muted-foreground")}>{meta?.hint}</p>
+                        <p className={cn("text-[11px] leading-4", state.entryType ? "text-foreground/80" : "text-muted-foreground")}>{state.meta?.hint}</p>
                       </>
-                    ) : isWeekend ? (
+                    ) : state.isWeekend ? (
                       <>
                         <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-foreground">
                           Weekend
                         </span>
                         <p className="text-[11px] leading-4 text-muted-foreground">Not selectable</p>
                       </>
-                    ) : isPastDay ? (
+                    ) : state.isPastDay ? (
                       <p className="text-[11px] leading-4 text-muted-foreground">Past day</p>
                     ) : (
                       <p className="text-[11px] leading-4 text-muted-foreground">Available</p>
