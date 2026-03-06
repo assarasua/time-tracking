@@ -72,7 +72,14 @@ export function verifySignedOAuthState(state: string) {
   }
 }
 
-export function buildGoogleAuthorizationUrl(state: string, redirectUri?: string) {
+function buildScopedGoogleAuthorizationUrl(params: {
+  state: string;
+  redirectUri?: string;
+  scope: string;
+  accessType?: "online" | "offline";
+  prompt?: string;
+  includeGrantedScopes?: boolean;
+}) {
   const { clientId } = getOAuthConfig();
   if (!clientId) {
     throw new Error("GOOGLE_CLIENT_ID is required");
@@ -80,17 +87,41 @@ export function buildGoogleAuthorizationUrl(state: string, redirectUri?: string)
 
   const url = new URL(GOOGLE_AUTH_URL);
   url.searchParams.set("client_id", clientId);
-  url.searchParams.set("redirect_uri", resolveRedirectUri(redirectUri));
+  url.searchParams.set("redirect_uri", resolveRedirectUri(params.redirectUri));
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", "openid email profile");
-  url.searchParams.set("state", state);
-  url.searchParams.set("access_type", "online");
-  url.searchParams.set("prompt", "select_account");
+  url.searchParams.set("scope", params.scope);
+  url.searchParams.set("state", params.state);
+  url.searchParams.set("access_type", params.accessType ?? "online");
+  url.searchParams.set("prompt", params.prompt ?? "select_account");
+  if (params.includeGrantedScopes) {
+    url.searchParams.set("include_granted_scopes", "true");
+  }
 
   return url;
 }
 
-export async function exchangeGoogleCodeForAccessToken(code: string, redirectUri?: string) {
+export function buildGoogleAuthorizationUrl(state: string, redirectUri?: string) {
+  return buildScopedGoogleAuthorizationUrl({
+    state,
+    redirectUri,
+    scope: "openid email profile",
+    accessType: "online",
+    prompt: "select_account"
+  });
+}
+
+export function buildGoogleCalendarAuthorizationUrl(state: string, redirectUri?: string) {
+  return buildScopedGoogleAuthorizationUrl({
+    state,
+    redirectUri,
+    scope: "https://www.googleapis.com/auth/calendar.events",
+    accessType: "offline",
+    prompt: "consent",
+    includeGrantedScopes: true
+  });
+}
+
+export async function exchangeGoogleCodeForTokenSet(code: string, redirectUri?: string) {
   const { clientId, clientSecret } = getOAuthConfig();
   if (!clientId || !clientSecret) {
     throw new Error("Google OAuth credentials are missing");
@@ -118,12 +149,27 @@ export async function exchangeGoogleCodeForAccessToken(code: string, redirectUri
     throw new Error(`Google token exchange failed (${response.status}): ${text}`);
   }
 
-  const payload = (await response.json()) as { access_token?: string };
+  const payload = (await response.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    scope?: string;
+  };
   if (!payload.access_token) {
     throw new Error("Google token exchange returned no access_token");
   }
 
-  return payload.access_token;
+  return {
+    accessToken: payload.access_token,
+    refreshToken: payload.refresh_token,
+    expiresIn: payload.expires_in,
+    scope: payload.scope
+  };
+}
+
+export async function exchangeGoogleCodeForAccessToken(code: string, redirectUri?: string) {
+  const tokenSet = await exchangeGoogleCodeForTokenSet(code, redirectUri);
+  return tokenSet.accessToken;
 }
 
 export type GoogleProfile = {

@@ -102,6 +102,36 @@ export interface TimeOffEntryTable {
   updatedAt: ColumnType<Date, Date | string | undefined, Date | string | undefined>;
 }
 
+export interface CalendarConnectionTable {
+  id: string;
+  userId: string;
+  provider: string;
+  calendarId: string;
+  accessToken: string | null;
+  refreshToken: string | null;
+  scope: string | null;
+  tokenExpiresAt: Date | null;
+  status: string;
+  lastError: string | null;
+  revokedAt: Date | null;
+  createdAt: ColumnType<Date, Date | string | undefined, never>;
+  updatedAt: ColumnType<Date, Date | string | undefined, Date | string | undefined>;
+}
+
+export interface TimeOffCalendarSyncTable {
+  id: string;
+  timeOffEntryId: string;
+  userId: string;
+  provider: string;
+  calendarId: string | null;
+  externalEventId: string | null;
+  syncStatus: string;
+  lastSyncedAt: Date | null;
+  lastError: string | null;
+  createdAt: ColumnType<Date, Date | string | undefined, never>;
+  updatedAt: ColumnType<Date, Date | string | undefined, Date | string | undefined>;
+}
+
 export interface Database {
   Organization: OrganizationTable;
   User: UserTable;
@@ -112,4 +142,6 @@ export interface Database {
   AppSession: AppSessionTable;
   UserPreference: UserPreferenceTable;
   TimeOffEntry: TimeOffEntryTable;
+  CalendarConnection: CalendarConnectionTable;
+  TimeOffCalendarSync: TimeOffCalendarSyncTable;
 }

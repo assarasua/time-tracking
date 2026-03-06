@@ -1,10 +1,12 @@
+import { endOfYear, format } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
-import { format } from "date-fns";
 
-import { requireSession } from "@/lib/rbac";
-import { getMembershipTimeOffEntries, upsertMembershipTimeOffEntries } from "@/lib/time-off";
 import { getCaliforniaPublicHolidaysByDate } from "@/lib/california-holidays";
+import { getGoogleCalendarStatus, syncTimeOffEntryToGoogleCalendar } from "@/lib/google-calendar";
+import { requireSession } from "@/lib/rbac";
+import { deleteMembershipTimeOffEntry, getMembershipTimeOffEntries, upsertMembershipTimeOffEntries } from "@/lib/time-off";
 import { createTimeOffSchema, timeOffQuerySchema } from "@/lib/validation";
+import { deleteTimeOffEntryFromGoogleCalendar } from "@/lib/google-calendar";
 
 export async function GET(request: NextRequest) {
   const authResult = await requireSession();
@@ -42,32 +44,40 @@ export async function POST(request: NextRequest) {
   }
 
   const today = format(new Date(), "yyyy-MM-dd");
-  const pastEntries = payload.data.entries.filter((entry) => entry.date < today);
+  const holidayLookup = getCaliforniaPublicHolidaysByDate(today, format(endOfYear(new Date()), "yyyy-MM-dd"));
+  const blockedDates = new Set<string>();
 
-  if (pastEntries.length > 0) {
-    return NextResponse.json({ error: "Time off cannot be added for past days." }, { status: 403 });
-  }
-
-  const blockedDates = new Set(
-    payload.data.entries
-      .filter((entry) => {
-        const day = new Date(`${entry.date}T12:00:00`);
-        const dayOfWeek = day.getDay();
-        return dayOfWeek === 0 || dayOfWeek === 6;
-      })
-      .map((entry) => entry.date)
-  );
-
-  const holidayLookup = getCaliforniaPublicHolidaysByDate(today, format(new Date(`${today}T12:00:00`).getFullYear() + 1 + "-12-31", "yyyy-MM-dd"));
   for (const entry of payload.data.entries) {
-    if (holidayLookup.has(entry.date)) {
+    if (entry.date < today) {
+      blockedDates.add(entry.date);
+      continue;
+    }
+
+    const day = new Date(`${entry.date}T12:00:00`);
+    const dayOfWeek = day.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6 || holidayLookup.has(entry.date)) {
       blockedDates.add(entry.date);
     }
   }
 
   if (blockedDates.size > 0) {
-    return NextResponse.json({ error: "Weekends and public holidays cannot be selected as time off." }, { status: 403 });
+    return NextResponse.json({ error: "Weekends, public holidays, and past days cannot be selected as time off." }, { status: 403 });
   }
+
+  const selectedFrom =
+    payload.data.from ??
+    payload.data.entries.reduce((min, entry) => (entry.date < min ? entry.date : min), payload.data.entries[0]?.date ?? today);
+  const selectedTo =
+    payload.data.to ??
+    payload.data.entries.reduce((max, entry) => (entry.date > max ? entry.date : max), payload.data.entries[0]?.date ?? today);
+
+  const existingEntries = await getMembershipTimeOffEntries({
+    organizationUserId: authResult.membership.id,
+    from: selectedFrom,
+    to: selectedTo
+  });
+  const desiredByDate = new Map(payload.data.entries.map((entry) => [entry.date, entry]));
+  const removals = existingEntries.filter((entry) => !desiredByDate.has(entry.date));
 
   const entries = await upsertMembershipTimeOffEntries({
     organizationId: authResult.membership.organizationId,
@@ -77,8 +87,32 @@ export async function POST(request: NextRequest) {
     )
   });
 
+  const deleteResults: Array<Awaited<ReturnType<typeof deleteTimeOffEntryFromGoogleCalendar>>> = [];
+  for (const entry of removals) {
+    await deleteMembershipTimeOffEntry({
+      id: entry.id,
+      organizationUserId: authResult.membership.id
+    });
+
+    const result = await deleteTimeOffEntryFromGoogleCalendar({
+      userId: authResult.session.user.id,
+      timeOffEntryId: entry.id
+    });
+
+    deleteResults.push(result);
+  }
+
+  const syncResults = await Promise.all(
+    entries.map((entry) => syncTimeOffEntryToGoogleCalendar({ userId: authResult.session.user.id, entry }))
+  );
+  const calendarStatus = await getGoogleCalendarStatus(authResult.session.user.id);
+
   return NextResponse.json({
     ok: true,
-    entries
+    entries,
+    googleCalendar: {
+      status: calendarStatus.status,
+      results: [...syncResults, ...deleteResults]
+    }
   });
 }

@@ -33,6 +33,8 @@ export const exportQuerySchema = z.object({
 export const timeOffQuerySchema = rangeQuerySchema;
 
 export const createTimeOffSchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   entries: z
     .array(
       z.object({
@@ -40,5 +42,13 @@ export const createTimeOffSchema = z.object({
         type: z.enum(["vacation", "unpaid_leave", "not_working"])
       })
     )
-    .min(1)
+    .default([])
+}).superRefine((value, ctx) => {
+  if (value.entries.length === 0 && (!value.from || !value.to)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["entries"],
+      message: "Provide from/to when saving an empty time off selection."
+    });
+  }
 });

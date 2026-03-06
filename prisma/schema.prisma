@@ -155,3 +155,41 @@ model TimeOffEntry {
   @@unique([organizationUserId, date])
   @@index([organizationId, date])
 }
+
+
+model CalendarConnection {
+  id             String   @id @default(cuid())
+  userId         String
+  provider       String
+  calendarId     String   @default("primary")
+  accessToken    String?
+  refreshToken   String?
+  scope          String?
+  tokenExpiresAt DateTime?
+  status         String   @default("active")
+  lastError      String?
+  revokedAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+}
+
+model TimeOffCalendarSync {
+  id              String   @id @default(cuid())
+  timeOffEntryId  String
+  userId          String
+  provider        String
+  calendarId      String?
+  externalEventId String?
+  syncStatus      String   @default("pending")
+  lastSyncedAt    DateTime?
+  lastError       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([timeOffEntryId, provider])
+  @@index([userId, syncStatus, updatedAt])
+}

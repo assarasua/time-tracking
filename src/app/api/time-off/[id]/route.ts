@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
 import { format } from "date-fns";
+import { NextResponse } from "next/server";
 
+import { deleteTimeOffEntryFromGoogleCalendar } from "@/lib/google-calendar";
 import { requireSession } from "@/lib/rbac";
 import { deleteMembershipTimeOffEntry, getMembershipTimeOffEntryById } from "@/lib/time-off";
 
@@ -36,5 +37,10 @@ export async function DELETE(_: Request, context: RouteContext) {
     return NextResponse.json({ error: "Time off entry not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ ok: true });
+  const calendar = await deleteTimeOffEntryFromGoogleCalendar({
+    userId: authResult.session.user.id,
+    timeOffEntryId: entry.id
+  });
+
+  return NextResponse.json({ ok: true, googleCalendar: calendar });
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { GoogleCalendarSyncCard } from "@/components/google-calendar-sync-card";
 
 type ProfileResponse = {
   timezone: string;
@@ -127,6 +128,9 @@ export function ProfileTimezoneSettings({
       >
         {message}
       </p>
+      <div className="mt-4">
+        <GoogleCalendarSyncCard />
+      </div>
     </div>
   );
 }

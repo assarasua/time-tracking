@@ -14,8 +14,10 @@ import {
   subMonths
 } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { GoogleCalendarSyncCard, type CalendarSyncStatus } from "@/components/google-calendar-sync-card";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCaliforniaPublicHolidaysByDate } from "@/lib/california-holidays";
@@ -151,7 +153,10 @@ export function TimeOffBoard() {
   const [status, setStatus] = useState("Loading time off...");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSyncingHolidays, setIsSyncingHolidays] = useState(false);
   const [announce, setAnnounce] = useState("");
+  const [calendarSyncStatus, setCalendarSyncStatus] = useState<CalendarSyncStatus>("not_connected");
+  const searchParams = useSearchParams();
 
   const calendarRange = useMemo(() => calendarBounds(visibleMonth), [visibleMonth]);
   const calendarDays = useMemo(
@@ -190,10 +195,6 @@ export function TimeOffBoard() {
       .sort((a, b) => a.date.localeCompare(b.date))
       .slice(0, 10);
   }, [savedEntries]);
-  const visibleMonthHolidays = useMemo(
-    () => [...californiaHolidays.values()].filter((holiday) => holiday.date.startsWith(format(visibleMonth, "yyyy-MM"))),
-    [californiaHolidays, visibleMonth]
-  );
   const visibleMonthDays = useMemo(() => calendarDays.filter((day) => isSameMonth(day, visibleMonth)), [calendarDays, visibleMonth]);
 
   async function loadEntries(from = selectedFrom, to = selectedTo) {
@@ -230,46 +231,36 @@ export function TimeOffBoard() {
   async function saveSelection() {
     if (!hasChanges || isSaving) return;
 
-    const additions = [...draftEntries.entries()]
-      .filter(([date, type]) => savedDraft.get(date) !== type)
-      .map(([date, type]) => ({ date, type }));
-    const removals = savedEntries.filter((entry) => !draftEntries.has(entry.date));
+    const entries = [...draftEntries.entries()].map(([date, type]) => ({ date, type }));
 
     setIsSaving(true);
     setStatus("Saving approved time off...");
 
     try {
-      if (additions.length > 0) {
-        const createResponse = await fetch("/api/time-off", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ entries: additions })
-        });
+      const createResponse = await fetch("/api/time-off", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          from: selectedFrom,
+          to: selectedTo,
+          entries
+        })
+      });
 
-        if (!createResponse.ok) {
-          throw new Error("Unable to save selected day types.");
-        }
-      }
-
-      if (removals.length > 0) {
-        const results = await Promise.all(
-          removals.map((entry) =>
-            fetch(`/api/time-off/${entry.id}`, {
-              method: "DELETE",
-              credentials: "include"
-            })
-          )
-        );
-
-        if (results.some((response) => !response.ok)) {
-          throw new Error("Unable to remove one or more saved days.");
-        }
+      if (!createResponse.ok) {
+        throw new Error("Unable to save selected day types.");
       }
 
       await loadEntries();
       setAnnounce("Time off saved.");
-      setStatus("Time off saved.");
+      if (calendarSyncStatus === "not_connected") {
+        setStatus("Time off saved in the app. Google Calendar sync is not active.");
+      } else if (calendarSyncStatus === "connected") {
+        setStatus("Time off saved and Google Calendar sync updated.");
+      } else {
+        setStatus("Time off saved in the app. Google Calendar sync needs attention.");
+      }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to save time off.");
     } finally {
@@ -332,6 +323,18 @@ export function TimeOffBoard() {
     setMode(detectMode(selectedFrom, selectedTo));
   }, [selectedFrom, selectedTo]);
 
+  useEffect(() => {
+    const syncParam = searchParams.get("calendar_sync");
+    if (!syncParam) return;
+    if (syncParam === "connected") {
+      setStatus("Google Calendar connected. Future approved days off will sync automatically.");
+    } else if (syncParam === "connection_failed") {
+      setStatus("Google Calendar connection failed. Your app data is unchanged.");
+    } else if (["oauth_state_invalid", "oauth_exchange_failed", "provider_error"].includes(syncParam)) {
+      setStatus("Google Calendar connection could not be completed. Please try again.");
+    }
+  }, [searchParams]);
+
   function getDayState(day: Date): DayState {
     const dayKey = format(day, "yyyy-MM-dd");
     const entryType = draftEntries.get(dayKey);
@@ -350,6 +353,34 @@ export function TimeOffBoard() {
       isBlockedDay: isPastDay || Boolean(systemHoliday) || isWeekend,
       meta: entryType ? typeMeta(entryType) : null
     };
+  }
+
+  async function syncPublicHolidays() {
+    setIsSyncingHolidays(true);
+    setStatus("Syncing public holidays to Google Calendar...");
+    try {
+      const response = await fetch("/api/integrations/google-calendar/sync-public-holidays", {
+        method: "POST",
+        credentials: "include"
+      });
+      if (!response.ok) {
+        throw new Error("Unable to sync public holidays.");
+      }
+      const payload = (await response.json()) as {
+        results?: Array<{ status: "synced" | "failed"; date: string }>;
+      };
+      const syncedCount = payload.results?.filter((result) => result.status === "synced").length ?? 0;
+      const failedCount = payload.results?.filter((result) => result.status === "failed").length ?? 0;
+      setStatus(
+        failedCount > 0
+          ? `Public holidays synced with ${failedCount} failures.`
+          : `${syncedCount} public holidays synced.`
+      );
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to sync public holidays.");
+    } finally {
+      setIsSyncingHolidays(false);
+    }
   }
 
   return (
@@ -433,6 +464,8 @@ export function TimeOffBoard() {
               </label>
             ) : null}
           </div>
+
+          <GoogleCalendarSyncCard onStatusChange={setCalendarSyncStatus} hideWhenConnected />
 
           <div className="rounded-xl border border-border bg-background p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -645,34 +678,6 @@ export function TimeOffBoard() {
             </Button>
           </div>
 
-          <div className="rounded-xl border border-success/30 bg-success/5 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Public holidays</p>
-                <p className="text-xs text-muted-foreground">California public holidays in {monthLabel}.</p>
-              </div>
-              <span className="rounded-full bg-success px-2.5 py-1 text-xs font-semibold text-success-foreground">
-                {visibleMonthHolidays.length}
-              </span>
-            </div>
-            <div className="mt-3 space-y-2">
-              {visibleMonthHolidays.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No public holidays in this calendar month.</p>
-              ) : (
-                visibleMonthHolidays.map((holiday) => (
-                  <div key={`visible-holiday-${holiday.date}`} className="flex items-center justify-between rounded-lg border border-success/20 bg-background px-3 py-2.5">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{formatDateOnly(holiday.date, "EEEE, MMM d")}</p>
-                      <p className="text-xs text-muted-foreground">{holiday.name}</p>
-                    </div>
-                    <span className="rounded-full bg-success px-2.5 py-1 text-xs font-semibold text-success-foreground">
-                      Public holiday
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
         </CardContent>
       </Card>
 
@@ -711,6 +716,18 @@ export function TimeOffBoard() {
                 <span className="rounded-full bg-success px-3 py-1 text-xs font-semibold text-success-foreground">Holiday</span>
               </div>
             ))}
+          {calendarSyncStatus === "connected" ? (
+            <div className="pt-2">
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => void syncPublicHolidays()}
+                disabled={isSyncingHolidays}
+              >
+                {isSyncingHolidays ? "Syncing..." : "Sync public holidays"}
+              </Button>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>

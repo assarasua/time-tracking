@@ -65,7 +65,7 @@ export function AppNav({ role, user }: { role: AppRole; user: NavUser }) {
   return (
     <div className="sticky top-2 z-40">
       {showSettings ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/30 p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[60] flex items-start justify-center bg-foreground/30 p-4 pt-20 sm:pt-24" role="dialog" aria-modal="true">
           <div className="w-full max-w-lg rounded-xl border border-border bg-card p-4 shadow-lg">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-base font-semibold text-foreground">Profile settings</p>
