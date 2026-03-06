@@ -1,186 +1,186 @@
 # Hutech Time Tracking
 
-Esto es una app de control horario para una sola empresa.
+This is a time tracking app for a single company.
 
-Sirve para 4 cosas principales:
-- fichar entrada y salida
-- añadir horas manualmente
-- pedir días libres
-- revisar horas y exportarlas desde admin
+It is built around 4 primary workflows:
+- clock in and clock out
+- add manual hours
+- request time off
+- review/export hours from admin
 
-No hace falta leer el código para entenderla. Este README explica qué hace el producto, qué reglas tiene y dónde está cada parte.
+You should not need to read the entire codebase to understand it. This README explains product behavior, business rules, and where each feature lives.
 
-## Qué ve cada usuario
+## User Views
 
-### Empleado
-Puede:
-- entrar con Google
-- ir directo a `Timesheet` después del login
-- usar un solo botón para `Clock in` y `Clock out`
-- ver el contador en vivo mientras está fichado
-- añadir horas manuales
-- ver sesiones por día
-- elegir su zona horaria desde el perfil
-- pedir días libres desde `Time off`
+### Employee
+Can:
+- sign in with Google
+- land directly on `Timesheet` after login
+- use a single `Clock in` / `Clock out` button
+- see a live timer while clocked in
+- add manual hours
+- review sessions by day
+- choose timezone from profile
+- request time off from `Time off`
 
 ### Admin
-Puede:
-- ver todas las personas
-- ver horas por empleado en un rango
-- ver días libres solicitados por empleado
-- descargar CSV mensual por persona o de toda la empresa
-- usar la sección `Admin` separada del resto de navegación
+Can:
+- view all people
+- review hours per employee in a date range
+- review requested time off per employee
+- download monthly CSV by person or for the whole company
+- use a separate `Admin` section in navigation
 
-## Cómo funciona cada pantalla
+## Screen Behavior
 
 ### 1. Dashboard
-El dashboard ahora está simplificado.
+The dashboard is intentionally simplified.
 
-Muestra solo el resumen de la semana actual:
-- horas trabajadas
-- horas esperadas
-- diferencia
-- días libres del año
-- gráfico diario de horas, también en móvil
-- días libres planeados para esta semana
-- festivos públicos de esta semana
+It only shows the current week summary:
+- worked hours
+- expected hours
+- delta
+- year-to-date time off
+- daily hours chart (desktop and mobile)
+- planned time off for this week
+- public holidays for this week
 
-No tiene filtro manual.
-Siempre enseña la semana actual.
+It has no manual filter.
+It always shows the current week.
 
 ### 2. Timesheet
-Es la pantalla principal.
+This is the main screen.
 
-Tiene:
-- botón único `Clock in / Clock out`
-- contador vivo mientras la sesión está abierta
-- vista por días
-- sesiones del día
-- añadir horas manuales
-- refresco en tiempo real cuando cambian las sesiones
+It includes:
+- single `Clock in / Clock out` button
+- live running timer while a session is open
+- day-based view
+- sessions list for the selected day
+- manual hour entry
+- real-time refresh when sessions change
 
-Comportamiento importante:
-- al guardar horas manuales se abren automáticamente las sesiones del día
-- si una nueva sesión pisa otra anterior, se puede sobreescribir
-- al confirmar el override, se borran las sesiones solapadas antiguas y queda la nueva
+Important behavior:
+- after saving manual hours, that day session group opens automatically
+- if a new manual session overlaps an existing one, user can choose override
+- on override confirm, old overlapping sessions are removed and only the new session remains
 
-### 3. Time off
-Sirve para marcar días completos libres.
+### 3. Time Off
+Used to mark full days off.
 
-Tipos permitidos:
+Allowed types:
 - Vacation
 - Unpaid leave
 - Not working
 
-No permite:
-- días pasados
-- fines de semana
-- festivos públicos de California
+Not allowed:
+- past days
+- weekends
+- California public holidays
 
-En móvil ya no usa un calendario comprimido de 7 columnas.
-Ahora usa una lista vertical por día, mucho más clara.
-En desktop sigue usando el calendario clásico.
+On mobile, it does not use a compressed 7-column calendar.
+It uses a vertical day list for better readability.
+On desktop, it keeps the classic calendar layout.
 
-Además:
-- los festivos públicos se generan automáticamente en código
-- no se guardan en base de datos
-- se muestran en el calendario como `Public holiday`
-- por ejemplo: `Cesar Chavez Day` el 31 de marzo
+Also:
+- public holidays are generated in code
+- they are not stored in the database
+- they appear in calendar as `Public holiday`
+- example: `Cesar Chavez Day` on March 31
 
 ### 4. Admin
-La navegación `Admin` está separada visualmente del resto y usa otro color.
+`Admin` navigation is visually separated from the rest and uses a different color.
 
-La pantalla tiene estas secciones:
+The screen has these sections:
 - `Monthly Employee hours report`
 - `People`
 - `Monthly Hours export`
 - `Time off`
 
 #### Monthly Employee hours report
-- usa su propio filtro visual
-- ese filtro solo afecta a este bloque
-- enseña horas por empleado y por día
+- has its own visual filter
+- that filter only affects this block
+- shows hours by employee and by day
 
 #### People
-- lista de personas
-- rol
-- descarga de CSV mensual por persona
+- people list
+- role
+- monthly CSV download per person
 
 #### Monthly Hours export
-- descarga CSV mensual de toda la empresa
+- monthly CSV export for the whole company
 
 #### Time off
-- va al final del panel
-- muestra días solicitados por empleado
-- tiene su propio filtro separado del filtro de horas
-- por defecto usa el año actual
-- permite abrir modal con el detalle exacto de fechas
+- placed at the bottom of the admin panel
+- shows requested days per employee
+- has an independent filter separate from the hours filter
+- defaults to current year
+- can open a modal with exact date details
 
-## Reglas importantes del producto
+## Important Product Rules
 
-### Fichaje
-- solo puede haber una sesión activa por usuario
-- `Clock in` abre la sesión
-- `Clock out` la cierra
-- el tiempo se actualiza en vivo
+### Clocking
+- only one active session per user is allowed
+- `Clock in` opens a session
+- `Clock out` closes it
+- elapsed time updates live
 
-### Añadir horas manuales
-- no se puede añadir en fechas futuras
-- no se puede añadir en fechas con más de 7 días de antigüedad
-- si hay solape, se puede sobreescribir
-- al sobreescribir, se elimina el registro anterior que se solapa
+### Manual Hours
+- cannot add in future dates
+- cannot add for dates older than 7 days
+- overlap can be overridden
+- on override, overlapping previous records are removed
 
-### Estado del día
-- `Complete` si hay 8 horas o más
-- `Partial` si hay más de 0 y menos de 8 horas
+### Day Status
+- `Complete` if 8+ hours
+- `Partial` if >0 and <8 hours
 
-### Días libres
-- solo son días completos
-- no hay medias jornadas
-- no hay aprobación manual en esta versión
-- se consideran auto-aprobados
-- no se puede pedir:
-  - un día pasado
-  - un fin de semana
-  - un festivo público
+### Time Off
+- full days only
+- no half-days
+- no manual approval in this version
+- requests are auto-approved
+- cannot request:
+  - a past day
+  - a weekend
+  - a public holiday
 
-## Zonas horarias
+## Timezones
 
-Cada usuario puede elegir su zona horaria desde el perfil.
-Se abre haciendo click en el nombre o avatar en la barra superior.
+Each user can choose timezone from profile.
+Open profile by clicking name/avatar in the top bar.
 
-Opciones disponibles:
+Available options:
 - Madrid (CET/CEST)
 - New York (ET)
 - Los Angeles (PT)
 - Manila (PHT)
 
-Importante:
-- la organización por defecto usa `America/Los_Angeles`
-- las sesiones con hora sí usan timezone
-- los días libres no usan hora; son fechas puras (`date-only`)
-- por eso un día libre no debe moverse de 11 a 10 por timezone
+Important:
+- default organization timezone is `America/Los_Angeles`
+- time sessions include timezone-aware timestamps
+- time-off entries are date-only (no time component)
+- because of that, a day off must not shift between dates due to timezone conversion
 
-## Autenticación
+## Authentication
 
-La app no usa NextAuth.
-Usa auth propia con Google OAuth y sesiones en base de datos.
+The app does not use NextAuth.
+It uses custom Google OAuth plus app-managed DB sessions.
 
-Flujo:
-1. el usuario pulsa login con Google
-2. Google devuelve el callback
-3. la app crea o reutiliza el usuario
-4. se crea una sesión propia en cookie `tt_session`
+Flow:
+1. user clicks Google login
+2. Google returns callback
+3. app creates or reuses the user
+4. app creates its own session cookie `tt_session`
 
-## Festivos públicos
+## Public Holidays
 
-Los festivos públicos de California:
-- no están guardados en la base de datos
-- se generan por código en runtime
-- están definidos en:
+California public holidays:
+- are not stored in the database
+- are generated in code at runtime
+- are defined in:
   - [src/lib/california-holidays.ts](/Users/axi/Documents/time-tracking/src/lib/california-holidays.ts)
 
-Ejemplos incluidos:
+Included examples:
 - New Year's Day
 - Martin Luther King Jr. Day
 - Presidents' Day
@@ -193,9 +193,9 @@ Ejemplos incluidos:
 - Day after Thanksgiving
 - Christmas Day
 
-## Base de datos
+## Database
 
-### Tablas que importan ahora
+### Key tables
 - `Organization`
 - `User`
 - `OrganizationUser`
@@ -206,15 +206,15 @@ Ejemplos incluidos:
 - `UserPreference`
 - `TimeOffEntry`
 
-### Qué guarda cada una
-- `User`: persona real
-- `OrganizationUser`: relación persona-empresa + rol + objetivo semanal
-- `TimeSession`: sesiones de trabajo
-- `AppSession`: login persistente propio de la app
-- `UserPreference`: zona horaria del usuario
-- `TimeOffEntry`: días libres guardados por usuario
+### What each stores
+- `User`: real person identity
+- `OrganizationUser`: person-company relationship + role + weekly target
+- `TimeSession`: work sessions
+- `AppSession`: persistent app login session
+- `UserPreference`: user timezone preference
+- `TimeOffEntry`: stored time-off days per user
 
-## API importante
+## Important API Endpoints
 
 ### Auth
 - `GET /api/auth/google/start`
@@ -223,23 +223,23 @@ Ejemplos incluidos:
 - `GET /api/auth/session`
 - `GET /api/auth/diagnostics`
 
-### Perfil
+### Profile
 - `GET /api/me/profile`
 - `PATCH /api/me/profile`
 
-### Horas usuario
+### User Hours
 - `GET /api/me/range-summary?from=YYYY-MM-DD&to=YYYY-MM-DD`
 - `GET /api/me/week-summary?week_start=YYYY-MM-DD`
 - `GET /api/me/month-summary?month=YYYY-MM`
 
-### Sesiones
+### Sessions
 - `GET /api/time-sessions/active`
 - `POST /api/time-sessions/start`
 - `POST /api/time-sessions/{id}/stop`
 - `POST /api/time-sessions`
 - `PATCH /api/time-sessions/{id}`
 
-### Time off
+### Time Off
 - `GET /api/time-off?from=YYYY-MM-DD&to=YYYY-MM-DD`
 - `POST /api/time-off`
 - `DELETE /api/time-off/{id}`
@@ -256,7 +256,7 @@ Ejemplos incluidos:
 - `GET /api/exports/payroll.csv?from=YYYY-MM-DD&to=YYYY-MM-DD`
 - `GET /api/exports/payroll.csv?from=YYYY-MM-DD&to=YYYY-MM-DD&membership_id=<id>`
 
-## Tecnología
+## Tech Stack
 
 - Next.js 15
 - React 19
@@ -264,35 +264,35 @@ Ejemplos incluidos:
 - Tailwind CSS
 - Kysely
 - PostgreSQL
-- Prisma para schema/migrations
-- Google OAuth custom
-- SSE para refresco en tiempo real
+- Prisma for schema/migrations
+- Custom Google OAuth
+- SSE for real-time updates
 
-## Tiempo real
+## Real-Time Updates
 
-La app usa un stream tipo SSE para refrescar cambios de sesiones sin recargar.
+The app uses an SSE stream to refresh session changes without page reload.
 
 Endpoint:
 - `GET /api/realtime/stream`
 
-Se usa sobre todo en `Timesheet`.
+Mainly used in `Timesheet`.
 
-## Variables de entorno
+## Environment Variables
 
-### Obligatorias
+### Required
 - `DATABASE_URL`
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `AUTH_SECRET`
 
-### Recomendadas
+### Recommended
 - `APP_BASE_URL`
 - `AUTH_TRUST_HOST=true`
 - `EMAIL_API_KEY`
 - `EMAIL_FROM_ADDRESS`
 - `CRON_SECRET`
 
-## Levantar en local
+## Run Locally
 
 ```bash
 npm install
@@ -301,10 +301,10 @@ npm run prisma:deploy
 npm run dev
 ```
 
-Abrir:
+Open:
 - [http://localhost:3000](http://localhost:3000)
 
-## Comandos útiles
+## Useful Commands
 
 ```bash
 npm run dev
@@ -314,7 +314,7 @@ npm run prisma:deploy
 npm run prisma:seed
 ```
 
-## Deploy en Railway
+## Railway Deploy
 
 Build:
 
@@ -328,70 +328,70 @@ Start:
 npm run start
 ```
 
-## Si algo falla
+## Troubleshooting
 
-### Login Google falla
-Revisar:
+### Google Login Fails
+Check:
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `AUTH_SECRET`
 - `APP_BASE_URL`
-- callback exacta:
+- exact callback:
   - `<APP_BASE_URL>/api/auth/google/callback`
 
-### La base de datos no conecta
-Revisar:
+### Database Connection Fails
+Check:
 - `DATABASE_URL`
-- SSL
-- que Railway esté accesible desde el runtime
+- SSL settings
+- Railway/network accessibility from runtime
 
-### El frontend va raro o sale un error de webpack
-Haz esto:
+### Frontend behaves oddly or webpack error appears
+Run:
 
 ```bash
 rm -rf .next
 npm run dev
 ```
 
-## Mapa de carpetas
+## Folder Map
 
-- [src/app](/Users/axi/Documents/time-tracking/src/app): páginas y rutas API
-- [src/components](/Users/axi/Documents/time-tracking/src/components): componentes UI
-- [src/lib](/Users/axi/Documents/time-tracking/src/lib): auth, db, reglas de negocio, utilidades
-- [prisma/schema.prisma](/Users/axi/Documents/time-tracking/prisma/schema.prisma): schema de referencia
-- [prisma/seed.mjs](/Users/axi/Documents/time-tracking/prisma/seed.mjs): seed local
+- [src/app](/Users/axi/Documents/time-tracking/src/app): pages and API routes
+- [src/components](/Users/axi/Documents/time-tracking/src/components): UI components
+- [src/lib](/Users/axi/Documents/time-tracking/src/lib): auth, db, business rules, utilities
+- [prisma/schema.prisma](/Users/axi/Documents/time-tracking/prisma/schema.prisma): reference schema
+- [prisma/seed.mjs](/Users/axi/Documents/time-tracking/prisma/seed.mjs): local seed
 
-## Dónde tocar cada cosa
+## Where to Change What
 
-### Si quieres cambiar login o sesiones
-Mira:
+### If you want to change login or sessions
+Look at:
 - [src/lib/auth](/Users/axi/Documents/time-tracking/src/lib/auth)
 - [src/app/api/auth](/Users/axi/Documents/time-tracking/src/app/api/auth)
 
-### Si quieres cambiar Timesheet
-Mira:
+### If you want to change Timesheet
+Look at:
 - [src/components/timesheet-board.tsx](/Users/axi/Documents/time-tracking/src/components/timesheet-board.tsx)
 - [src/app/api/time-sessions](/Users/axi/Documents/time-tracking/src/app/api/time-sessions)
 
-### Si quieres cambiar Time off
-Mira:
+### If you want to change Time off
+Look at:
 - [src/components/time-off-board.tsx](/Users/axi/Documents/time-tracking/src/components/time-off-board.tsx)
 - [src/lib/time-off.ts](/Users/axi/Documents/time-tracking/src/lib/time-off.ts)
 - [src/lib/california-holidays.ts](/Users/axi/Documents/time-tracking/src/lib/california-holidays.ts)
 - [src/app/api/time-off](/Users/axi/Documents/time-tracking/src/app/api/time-off)
 
-### Si quieres cambiar Admin
-Mira:
+### If you want to change Admin
+Look at:
 - [src/app/admin/page.tsx](/Users/axi/Documents/time-tracking/src/app/admin/page.tsx)
 - [src/components/admin-time-off-summary.tsx](/Users/axi/Documents/time-tracking/src/components/admin-time-off-summary.tsx)
 
-## Resumen corto
+## Quick Summary
 
-Si no quieres leer todo:
-- `Timesheet` es la pantalla principal
-- `Dashboard` enseña la semana actual
-- `Time off` sirve para pedir días completos
-- `Admin` sirve para revisar horas, personas y exportes
-- los festivos públicos vienen de código, no de base de datos
-- los días libres no usan timezone
-- las sesiones con hora sí usan timezone
+If you skip the details:
+- `Timesheet` is the primary screen
+- `Dashboard` always shows the current week
+- `Time off` handles full-day requests
+- `Admin` handles review, people, and exports
+- public holidays come from code, not database
+- time-off uses date-only values (no timezone shifting)
+- sessions use timezone-aware timestamps
