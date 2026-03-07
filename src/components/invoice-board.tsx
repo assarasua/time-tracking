@@ -28,7 +28,7 @@ type InvoiceRecord = {
   updatedAt: string;
 };
 
-const PRESETS: Array<Exclude<MonthSelectionMode, "custom" | "current" | "next">> = ["previous"];
+const PRESETS: MonthSelectionMode[] = ["previous"];
 
 function isExpectedInvoiceMonth(month: string) {
   return month <= getPreviousMonthRange().month;
@@ -94,7 +94,7 @@ export function InvoiceBoard() {
     void loadInvoice(month);
   }, [month]);
 
-  function applyPreset(nextMode: Exclude<MonthSelectionMode, "custom" | "current" | "next">) {
+  function applyPreset(nextMode: MonthSelectionMode) {
     const nextRange = getPreviousMonthRange();
     setMode(nextMode);
     setMonth(nextRange.month);

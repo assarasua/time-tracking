@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { formatFileSize } from "@/lib/file-size";
 import {
+  formatMonthKey,
   getMonthModeLabel,
   getPreviousMonthRange,
   type MonthSelectionMode
@@ -30,7 +31,7 @@ type AdminInvoice = {
   updatedAt: string;
 };
 
-const PRESETS: Array<Exclude<MonthSelectionMode, "custom" | "current" | "next">> = ["previous"];
+const PRESETS: MonthSelectionMode[] = ["previous"];
 
 function isExpectedInvoiceMonth(month: string) {
   return month <= getPreviousMonthRange().month;
@@ -81,7 +82,7 @@ export function AdminInvoicesSummary({ members }: { members: MemberRow[] }) {
     void loadInvoices(month);
   }, [month]);
 
-  function applyPreset(nextMode: Exclude<MonthSelectionMode, "custom" | "current" | "next">) {
+  function applyPreset(nextMode: MonthSelectionMode) {
     const nextRange = getPreviousMonthRange();
     setMode(nextMode);
     setMonth(nextRange.month);
@@ -93,7 +94,7 @@ export function AdminInvoicesSummary({ members }: { members: MemberRow[] }) {
     setMonth(nextMonth);
   }
 
-  const monthLabel = format(new Date(`${month}-01T12:00:00`), "MMMM yyyy");
+  const monthLabel = formatMonthKey(month);
 
   return (
     <div className="space-y-5">

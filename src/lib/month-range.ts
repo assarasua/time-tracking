@@ -1,6 +1,6 @@
-import { addMonths, endOfMonth, format, startOfMonth, subMonths } from "date-fns";
+import { endOfMonth, format, startOfMonth, subMonths } from "date-fns";
 
-export type MonthSelectionMode = "previous" | "current" | "next" | "custom";
+export type MonthSelectionMode = "previous" | "custom";
 
 export type MonthRange = {
   month: string;
@@ -17,16 +17,8 @@ function buildMonthRange(base: Date): MonthRange {
   };
 }
 
-export function getCurrentMonthRange() {
-  return buildMonthRange(new Date());
-}
-
 export function getPreviousMonthRange() {
   return buildMonthRange(subMonths(new Date(), 1));
-}
-
-export function getNextMonthRange() {
-  return buildMonthRange(addMonths(new Date(), 1));
 }
 
 export function getRangeForMonth(month: string): MonthRange {
@@ -34,17 +26,8 @@ export function getRangeForMonth(month: string): MonthRange {
   return buildMonthRange(new Date(year, monthNumber - 1, 1));
 }
 
-export function detectMonthMode(month: string): MonthSelectionMode {
-  if (month === getCurrentMonthRange().month) return "current";
-  if (month === getPreviousMonthRange().month) return "previous";
-  if (month === getNextMonthRange().month) return "next";
-  return "custom";
-}
-
 export function getMonthModeLabel(mode: MonthSelectionMode) {
   if (mode === "previous") return "Previous month";
-  if (mode === "next") return "Next month";
-  if (mode === "current") return "Current month";
   return "Custom month";
 }
 
