@@ -4,8 +4,8 @@ import "@/app/globals.css";
 import { PageTransition } from "@/components/page-transition";
 
 export const metadata: Metadata = {
-  title: "Hutech Time Tracking",
-  description: "Track daily hours, review weekly totals, and close payroll faster."
+  title: "Hutech HR Hub",
+  description: "Manage employee time tracking, time off, monthly invoices, and quarterly goals in one place."
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

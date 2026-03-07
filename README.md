@@ -2,10 +2,12 @@
 
 This is a time tracking app for a single company.
 
-It is built around 4 primary workflows:
+It is built around 6 primary workflows:
 - clock in and clock out
 - add manual hours
 - request time off
+- upload monthly invoices
+- define and evaluate quarterly goals
 - review/export hours from admin
 
 It now also includes optional Google Calendar sync for `Time off`.
@@ -25,12 +27,18 @@ Can:
 - choose timezone from profile
 - request time off from `Time off`
 - connect personal Google Calendar for automatic day-off sync
+- upload one PDF invoice per month
+- view, download, replace, and delete own uploaded invoices
+- see personal quarterly goals and evaluation results
 
 ### Admin
 Can:
 - view all people
 - review hours per employee in a date range
 - review requested time off per employee
+- receive invoice-upload notification emails
+- review uploaded invoices per employee and month
+- review and evaluate goals per employee
 - download monthly CSV by person or for the whole company
 - use a separate `Admin` section in navigation
 
@@ -107,6 +115,8 @@ The screen has these sections:
 - `People`
 - `Monthly Hours export`
 - `Time off`
+- `Invoices`
+- `Goals`
 
 #### Monthly Employee hours report
 - has its own visual filter
@@ -127,6 +137,31 @@ The screen has these sections:
 - has an independent filter separate from the hours filter
 - defaults to current year
 - can open a modal with exact date details
+
+#### Invoices
+- admin review of monthly invoice coverage by employee
+- defaults to previous month
+- supports `Previous month` and `Custom month`
+- each employee row shows:
+  - uploaded
+  - missing
+  - not due yet
+- admin can:
+  - view PDF inline
+  - download PDF
+
+#### Goals
+- goals are the last section in admin
+- goals are per person, not organization-wide
+- each employee row shows:
+  - total goals
+  - completed goals
+  - in-progress goals
+  - achieved goals
+  - not-achieved goals
+  - average progress
+- `Open goals` opens a modal near the viewing area
+- admin can evaluate each goal directly inside the modal
 
 ## Important Product Rules
 
@@ -169,6 +204,54 @@ The screen has these sections:
 - disconnecting removes all synced events created by the app
 - if Google rate-limits requests, the app retries with backoff
 - if sync still fails, the app keeps the day off saved locally and shows a reconnect/sync issue state
+
+### Invoices
+- one PDF invoice per user per month
+- uploading the same month again replaces the old file
+- current month is not counted as expected
+- previous month or older is considered expected
+- the app stores the PDF binary directly in Postgres
+- users can:
+  - upload
+  - replace
+  - preview
+  - download
+  - delete
+- admin can:
+  - preview
+  - download
+  - see missing/uploaded status by employee
+
+### Invoice Email Notifications
+- when an invoice is uploaded or replaced, all active admins are emailed automatically
+- email uses the app's existing Resend setup
+- email includes:
+  - employee name
+  - employee email
+  - invoice month
+  - upload timestamp
+  - filename
+  - link to admin
+  - attached PDF
+- invoice upload still succeeds if email sending fails
+- email sending is sequential and retries on Resend rate limits
+
+### Goals
+- goals are quarterly and per person
+- each quarter should have 3 to 5 goals
+- each goal includes:
+  - title
+  - metric
+  - target value
+  - current value
+  - unit
+- evaluation adds:
+  - status: `in_progress` or `completed`
+  - final actual value
+  - achieved / not achieved
+  - short evaluation note
+- only admin can evaluate goals
+- employees can view evaluation results on their own goals
 
 ## Timezones
 
@@ -238,6 +321,8 @@ Included examples:
 - `TimeOffEntry`
 - `CalendarConnection`
 - `TimeOffCalendarSync`
+- `Invoice`
+- `Goal`
 
 ### What each stores
 - `User`: real person identity
@@ -248,6 +333,8 @@ Included examples:
 - `TimeOffEntry`: stored time-off days per user
 - `CalendarConnection`: encrypted Google Calendar connection per user
 - `TimeOffCalendarSync`: mapping between app time-off records and Google Calendar events
+- `Invoice`: monthly PDF invoice stored in DB
+- `Goal`: quarterly per-user goals plus evaluation metadata
 
 ## Important API Endpoints
 
@@ -279,6 +366,20 @@ Included examples:
 - `POST /api/time-off`
 - `DELETE /api/time-off/{id}`
 - `GET /api/admin/time-off?from=YYYY-MM-DD&to=YYYY-MM-DD`
+
+### Invoices
+- `GET /api/invoices?month=YYYY-MM`
+- `GET /api/invoices?all=1`
+- `POST /api/invoices`
+- `DELETE /api/invoices/{id}`
+- `GET /api/invoices/{id}/download`
+- `GET /api/admin/invoices?month=YYYY-MM`
+- `GET /api/admin/invoices/{id}/download`
+
+### Goals
+- `GET /api/goals?quarter=YYYY-QN`
+- `PUT /api/goals`
+- `PATCH /api/goals/{id}/evaluation`
 
 ### Google Calendar Integration
 - `GET /api/integrations/google-calendar/status`
@@ -415,6 +516,24 @@ If you see `rateLimitExceeded`:
 - if Google still refuses the write, wait and try again later
 - app-side time off remains saved even if Google rejects the event temporarily
 
+### Invoice email not sent
+Check:
+- `EMAIL_API_KEY`
+- `EMAIL_FROM_ADDRESS`
+- that the sender domain is verified in Resend
+- that admins really exist and are active
+
+Important:
+- invoice emails are sent one admin at a time
+- the app retries when Resend answers with `rate_limit_exceeded`
+- upload success does not depend on email success
+
+### Invoice month shows the wrong month
+Important:
+- invoice months are now handled as `YYYY-MM`, not timestamped datetimes
+- if you see January rendered as December, that was a timezone rendering bug
+- current code formats month keys without timezone shifting
+
 ### Database Connection Fails
 Check:
 - `DATABASE_URL`
@@ -469,12 +588,31 @@ Look at:
 - [src/app/admin/page.tsx](/Users/axi/Documents/time-tracking/src/app/admin/page.tsx)
 - [src/components/admin-time-off-summary.tsx](/Users/axi/Documents/time-tracking/src/components/admin-time-off-summary.tsx)
 
+### If you want to change Invoices
+Look at:
+- [src/components/invoice-board.tsx](/Users/axi/Documents/time-tracking/src/components/invoice-board.tsx)
+- [src/components/admin-invoices-summary.tsx](/Users/axi/Documents/time-tracking/src/components/admin-invoices-summary.tsx)
+- [src/lib/invoices.ts](/Users/axi/Documents/time-tracking/src/lib/invoices.ts)
+- [src/app/api/invoices](/Users/axi/Documents/time-tracking/src/app/api/invoices)
+- [src/lib/email.ts](/Users/axi/Documents/time-tracking/src/lib/email.ts)
+
+### If you want to change Goals
+Look at:
+- [src/app/goals/page.tsx](/Users/axi/Documents/time-tracking/src/app/goals/page.tsx)
+- [src/components/goals-board.tsx](/Users/axi/Documents/time-tracking/src/components/goals-board.tsx)
+- [src/components/admin-goals-summary.tsx](/Users/axi/Documents/time-tracking/src/components/admin-goals-summary.tsx)
+- [src/components/goals-summary-card.tsx](/Users/axi/Documents/time-tracking/src/components/goals-summary-card.tsx)
+- [src/lib/goals.ts](/Users/axi/Documents/time-tracking/src/lib/goals.ts)
+
 ## Quick Summary
 
 If you skip the details:
 - `Timesheet` is the primary screen
 - `Dashboard` always shows the current week
 - `Time off` handles full-day requests
+- `Invoices` handles one PDF per month per user
+- invoice uploads notify active admins by email
+- `Goals` are quarterly and per person
 - Google Calendar sync is optional and managed from `Time off` or profile settings
 - `Admin` handles review, people, and exports
 - public holidays come from code, not database
