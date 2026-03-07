@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/cn";
 import { formatFileSize } from "@/lib/file-size";
 import {
+  formatMonthKey,
   getMonthModeLabel,
   getPreviousMonthRange,
   getRangeForMonth,
@@ -47,7 +48,7 @@ export function InvoiceBoard() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const range = useMemo(() => getRangeForMonth(month), [month]);
-  const monthLabel = useMemo(() => format(new Date(`${month}-01T12:00:00`), "MMMM yyyy"), [month]);
+  const monthLabel = useMemo(() => formatMonthKey(month), [month]);
   const isExpectedMonth = useMemo(() => isExpectedInvoiceMonth(month), [month]);
 
   async function loadInvoice(targetMonth = month) {
@@ -142,6 +143,37 @@ export function InvoiceBoard() {
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "Unable to upload invoice.");
       setStatus("Invoice upload failed.");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleDelete(targetInvoice: InvoiceRecord) {
+    setIsBusy(true);
+    setError(null);
+    setStatus(`Deleting invoice for ${targetInvoice.invoiceMonth}...`);
+
+    try {
+      const response = await fetch(`/api/invoices/${targetInvoice.id}`, {
+        method: "DELETE",
+        credentials: "include"
+      });
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error ?? "Unable to delete invoice.");
+      }
+
+      setAllInvoices((currentInvoices) => currentInvoices.filter((currentInvoice) => currentInvoice.id !== targetInvoice.id));
+      if (invoice?.id === targetInvoice.id) {
+        setInvoice(null);
+      }
+      if (previewInvoice?.id === targetInvoice.id) {
+        setPreviewInvoice(null);
+      }
+      setStatus(`Invoice deleted for ${targetInvoice.invoiceMonth}.`);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete invoice.");
+      setStatus("Invoice delete failed.");
     } finally {
       setIsBusy(false);
     }
@@ -281,6 +313,9 @@ export function InvoiceBoard() {
                     >
                       Download PDF
                     </Link>
+                    <Button type="button" variant="ghost" className="border border-destructive/30 bg-background text-destructive hover:bg-destructive/10" onClick={() => void handleDelete(invoice)} disabled={isBusy}>
+                      Delete
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -312,7 +347,7 @@ export function InvoiceBoard() {
                 {allInvoices.map((uploadedInvoice) => (
                   <div key={uploadedInvoice.id} className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground">{format(new Date(`${uploadedInvoice.invoiceMonth}-01T12:00:00`), "MMMM yyyy")}</p>
+                      <p className="text-sm font-semibold text-foreground">{formatMonthKey(uploadedInvoice.invoiceMonth)}</p>
                       <p className="truncate text-sm text-foreground">{uploadedInvoice.fileName}</p>
                       <p className="text-xs text-muted-foreground">
                         {formatFileSize(uploadedInvoice.fileSizeBytes)} · Uploaded {format(new Date(uploadedInvoice.updatedAt), "MMM d, yyyy p")}
@@ -328,6 +363,9 @@ export function InvoiceBoard() {
                       >
                         Download PDF
                       </Link>
+                      <Button type="button" variant="ghost" className="border border-destructive/30 bg-background text-destructive hover:bg-destructive/10" onClick={() => void handleDelete(uploadedInvoice)} disabled={isBusy}>
+                        Delete
+                      </Button>
                     </div>
                   </div>
                 ))}

@@ -47,3 +47,10 @@ export function getMonthModeLabel(mode: MonthSelectionMode) {
   if (mode === "current") return "Current month";
   return "Custom month";
 }
+
+export function formatMonthKey(month: string) {
+  const [yearText, monthText] = month.split("-");
+  const year = Number(yearText);
+  const monthIndex = Number(monthText) - 1;
+  return format(new Date(year, monthIndex, 1), "MMMM yyyy");
+}
