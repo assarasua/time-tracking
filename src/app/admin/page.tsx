@@ -2,6 +2,8 @@ import { endOfMonth, format, startOfMonth } from "date-fns";
 import { redirect } from "next/navigation";
 
 import { getAdminRangeOverviewData } from "@/lib/aggregates";
+import { AdminGoalsSummary } from "@/components/admin-goals-summary";
+import { AdminInvoicesSummary } from "@/components/admin-invoices-summary";
 import { AdminTimeOffSummary } from "@/components/admin-time-off-summary";
 import { DateRangePresetHeader } from "@/components/date-range-preset-header";
 import { ExportDownloadButton } from "@/components/export-download-button";
@@ -11,6 +13,8 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Role } from "@/lib/db/schema";
 import { getCurrentWeekRange, resolveRequestedRange } from "@/lib/date-range";
+import { getGoalsForQuarterByMembers } from "@/lib/goals";
+import { getCurrentQuarterRange } from "@/lib/quarter-range";
 
 type SearchParams = Promise<{ from?: string; to?: string }>;
 
@@ -45,8 +49,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
   const currentMonth = new Date();
   const exportFrom = format(startOfMonth(currentMonth), "yyyy-MM-dd");
   const exportTo = format(endOfMonth(currentMonth), "yyyy-MM-dd");
+  const currentQuarter = getCurrentQuarterRange();
 
-  const [members, overview] = await Promise.all([
+  const [members, overview, quarterGoals] = await Promise.all([
     db.organizationUser.findMany({
       where: {
         organizationId: session.user.organizationId
@@ -62,6 +67,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
       organizationId: session.user.organizationId,
       from: selectedFrom,
       to: selectedTo
+    }),
+    getGoalsForQuarterByMembers({
+      organizationId: session.user.organizationId,
+      quarterKey: currentQuarter.quarterKey
     })
   ]);
 
@@ -75,6 +84,40 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
       }
     ])
   );
+
+  const memberRows = members.map((member: any) => ({
+    membershipId: member.id,
+    name: member.user.name ?? member.user.email,
+    email: member.user.email
+  }));
+
+  const goalsByMember = new Map<string, any[]>();
+  for (const goal of quarterGoals) {
+    const current = goalsByMember.get(goal.membershipId) ?? [];
+    current.push(goal);
+    goalsByMember.set(goal.membershipId, current);
+  }
+
+  const goalRows = memberRows.map((member: { membershipId: string; name: string; email: string }) => ({
+    ...member,
+    goals: (goalsByMember.get(member.membershipId) ?? []).map((goal: any) => ({
+      id: goal.id,
+      quarterKey: goal.quarterKey,
+      title: goal.title,
+      metric: goal.metric,
+      targetValue: goal.targetValue,
+      currentValue: goal.currentValue,
+      actualValue: goal.actualValue ?? null,
+      unit: goal.unit,
+      status: goal.status ?? "in_progress",
+      achievementStatus: goal.achievementStatus ?? null,
+      evaluationNote: goal.evaluationNote ?? null,
+      completedAt: goal.completedAt ?? null,
+      completedByUserId: goal.completedByUserId ?? null,
+      sortOrder: goal.sortOrder
+    }))
+  }));
+
   return (
     <div className="space-y-5">
       <AppNav role={session.user.role} user={session.user} />
@@ -208,15 +251,26 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <AdminTimeOffSummary
-            members={members.map((member: any) => ({
-              membershipId: member.id,
-              name: member.user.name ?? member.user.email,
-              email: member.user.email
-            }))}
-          />
+          <AdminTimeOffSummary members={memberRows} />
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Invoices</CardTitle>
+          <CardDescription>Monthly invoice coverage by employee, including missing and uploaded PDF invoices.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AdminInvoicesSummary members={memberRows} />
+        </CardContent>
+      </Card>
+
+      <AdminGoalsSummary
+        quarterLabel={currentQuarter.label}
+        quarterFrom={currentQuarter.from}
+        quarterTo={currentQuarter.to}
+        rows={goalRows}
+      />
     </div>
   );
 }

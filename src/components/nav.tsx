@@ -38,7 +38,9 @@ export function AppNav({ role, user }: { role: AppRole; user: NavUser }) {
   const primaryTabs: TabItem[] = [
     { label: "Dashboard", href: "/dashboard" as Route },
     { label: "Timesheet", href: "/timesheet" as Route },
-    { label: "Time off", href: "/time-off" as Route }
+    { label: "Time off", href: "/time-off" as Route },
+    { label: "Goals", href: "/goals" as Route },
+    { label: "Invoices", href: "/invoices" as Route }
   ];
   const adminTab = role === "admin" ? { label: "Admin", href: "/admin" as Route } : null;
   const initials = getInitials(user.name, user.email);

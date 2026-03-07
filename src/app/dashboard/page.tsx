@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 
 import { ClockCard } from "@/components/clock-card";
+import { GoalsSummaryCard } from "@/components/goals-summary-card";
 import { AppNav } from "@/components/nav";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
 
 import { getCurrentWeekRange } from "@/lib/date-range";
 
@@ -15,6 +17,18 @@ export default async function DashboardPage() {
   }
 
   const selected = getCurrentWeekRange(1);
+  const membership = await db.organizationUser.findFirst({
+    where: {
+      organizationId: session.user.organizationId,
+      userId: session.user.id,
+      active: true
+    }
+  });
+
+  if (!membership) {
+    redirect("/login");
+  }
+
   return (
     <div className="space-y-4 sm:space-y-5">
       <AppNav role={session.user.role} user={session.user} />
@@ -33,6 +47,12 @@ export default async function DashboardPage() {
         </CardContent>
       </Card>
       <ClockCard from={selected.from} to={selected.to} />
+      <GoalsSummaryCard
+        organizationId={session.user.organizationId}
+        organizationUserId={membership.id}
+        heading="Your quarter goals"
+        description="Progress against your current quarterly KPIs and delivery targets."
+      />
     </div>
   );
 }

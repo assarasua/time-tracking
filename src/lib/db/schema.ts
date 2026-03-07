@@ -132,6 +132,41 @@ export interface TimeOffCalendarSyncTable {
   updatedAt: ColumnType<Date, Date | string | undefined, Date | string | undefined>;
 }
 
+export interface InvoiceTable {
+  id: string;
+  organizationId: string;
+  organizationUserId: string;
+  invoiceMonth: ColumnType<Date, Date | string, Date | string>;
+  fileName: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  fileData: Uint8Array;
+  uploadedByUserId: string;
+  createdAt: ColumnType<Date, Date | string | undefined, never>;
+  updatedAt: ColumnType<Date, Date | string | undefined, Date | string | undefined>;
+}
+
+export interface GoalTable {
+  id: string;
+  organizationId: string;
+  organizationUserId: string | null;
+  quarterKey: string;
+  title: string;
+  metric: string;
+  targetValue: number;
+  currentValue: number;
+  actualValue: number | null;
+  unit: string;
+  status: "in_progress" | "completed";
+  achievementStatus: "achieved" | "not_achieved" | null;
+  evaluationNote: string | null;
+  completedAt: Date | null;
+  completedByUserId: string | null;
+  sortOrder: number;
+  createdAt: ColumnType<Date, Date | string | undefined, never>;
+  updatedAt: ColumnType<Date, Date | string | undefined, Date | string | undefined>;
+}
+
 export interface Database {
   Organization: OrganizationTable;
   User: UserTable;
@@ -144,4 +179,6 @@ export interface Database {
   TimeOffEntry: TimeOffEntryTable;
   CalendarConnection: CalendarConnectionTable;
   TimeOffCalendarSync: TimeOffCalendarSyncTable;
+  Invoice: InvoiceTable;
+  Goal: GoalTable;
 }

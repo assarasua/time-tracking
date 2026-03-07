@@ -19,16 +19,18 @@ enum UserStatus {
 }
 
 model Organization {
-  id            String             @id @default(cuid())
-  name          String
-  timezone      String             @default("America/Los_Angeles")
-  weekStartDay  Int                @default(1)
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  memberships   OrganizationUser[]
-  weekLocks     WeekLock[]
-  appSessions   AppSession[]
+  id             String             @id @default(cuid())
+  name           String
+  timezone       String             @default("America/Los_Angeles")
+  weekStartDay   Int                @default(1)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  memberships    OrganizationUser[]
+  weekLocks      WeekLock[]
+  appSessions    AppSession[]
   timeOffEntries TimeOffEntry[]
+  invoices       Invoice[]
+  goals          Goal[]
 }
 
 model User {
@@ -49,6 +51,8 @@ model User {
   preference          UserPreference?
   calendarConnections CalendarConnection[]
   timeOffCalendarSync TimeOffCalendarSync[]
+  uploadedInvoices    Invoice[]              @relation("InvoiceUploader")
+  completedGoals      Goal[]                 @relation("GoalCompleter")
 }
 
 model OrganizationUser {
@@ -64,6 +68,8 @@ model OrganizationUser {
   user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   timeSessions       TimeSession[]
   timeOffEntries     TimeOffEntry[]
+  invoices           Invoice[]
+  goals              Goal[]
 
   @@unique([organizationId, userId])
   @@index([organizationId, role])
@@ -158,7 +164,6 @@ model TimeOffEntry {
   @@index([organizationId, date])
 }
 
-
 model CalendarConnection {
   id             String   @id @default(cuid())
   userId         String
@@ -194,4 +199,50 @@ model TimeOffCalendarSync {
 
   @@unique([timeOffEntryId, provider])
   @@index([userId, syncStatus, updatedAt])
+}
+
+model Invoice {
+  id                 String           @id @default(cuid())
+  organizationId     String
+  organizationUserId String
+  invoiceMonth       DateTime
+  fileName           String
+  mimeType           String
+  fileSizeBytes      Int
+  fileData           Bytes
+  uploadedByUserId   String
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  organization       Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationUser   OrganizationUser @relation(fields: [organizationUserId], references: [id], onDelete: Cascade)
+  uploadedBy         User             @relation("InvoiceUploader", fields: [uploadedByUserId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationUserId, invoiceMonth])
+  @@index([organizationId, invoiceMonth])
+}
+
+model Goal {
+  id                 String           @id @default(cuid())
+  organizationId     String
+  organizationUserId String?
+  quarterKey         String
+  title              String
+  metric             String
+  targetValue        Float
+  currentValue       Float
+  actualValue        Float?
+  achievementStatus String?
+  unit               String
+  status             String           @default("in_progress")
+  evaluationNote     String?
+  completedAt        DateTime?
+  completedByUserId  String?
+  sortOrder          Int
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  organization       Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationUser   OrganizationUser? @relation(fields: [organizationUserId], references: [id], onDelete: Cascade)
+  completedBy        User?            @relation("GoalCompleter", fields: [completedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, organizationUserId, quarterKey])
 }
