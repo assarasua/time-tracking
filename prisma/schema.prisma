@@ -30,6 +30,7 @@ model Organization {
   appSessions    AppSession[]
   timeOffEntries TimeOffEntry[]
   invoices       Invoice[]
+  expenses       Expense[]
   goals          Goal[]
 }
 
@@ -52,6 +53,8 @@ model User {
   calendarConnections CalendarConnection[]
   timeOffCalendarSync TimeOffCalendarSync[]
   uploadedInvoices    Invoice[]              @relation("InvoiceUploader")
+  uploadedExpenses    Expense[]              @relation("ExpenseUploader")
+  paidExpenses        Expense[]              @relation("ExpensePayer")
   completedGoals      Goal[]                 @relation("GoalCompleter")
 }
 
@@ -69,6 +72,7 @@ model OrganizationUser {
   timeSessions       TimeSession[]
   timeOffEntries     TimeOffEntry[]
   invoices           Invoice[]
+  expenses           Expense[]
   goals              Goal[]
 
   @@unique([organizationId, userId])
@@ -219,6 +223,33 @@ model Invoice {
 
   @@unique([organizationUserId, invoiceMonth])
   @@index([organizationId, invoiceMonth])
+}
+
+model Expense {
+  id                 String           @id @default(cuid())
+  organizationId     String
+  organizationUserId String
+  expenseMonth       DateTime
+  expenseDate        DateTime
+  reference          String
+  totalAmount        Float
+  currency           String           @default("USD")
+  fileName           String
+  mimeType           String
+  fileSizeBytes      Int
+  fileData           Bytes
+  uploadedByUserId   String
+  paidAt             DateTime?
+  paidByUserId       String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  organization       Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationUser   OrganizationUser @relation(fields: [organizationUserId], references: [id], onDelete: Cascade)
+  uploadedBy         User             @relation("ExpenseUploader", fields: [uploadedByUserId], references: [id], onDelete: Cascade)
+  paidBy            User?             @relation("ExpensePayer", fields: [paidByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, expenseMonth])
+  @@index([organizationUserId, expenseMonth])
 }
 
 model Goal {

@@ -20,6 +20,7 @@ export const monthQuerySchema = z.object({
 });
 
 export const invoiceMonthQuerySchema = monthQuerySchema;
+export const expenseMonthQuerySchema = monthQuerySchema;
 export const quarterQuerySchema = z.object({
   quarter: z.string().regex(/^\d{4}-Q[1-4]$/)
 });

@@ -2,13 +2,14 @@ import { endOfMonth, format, startOfMonth } from "date-fns";
 import { redirect } from "next/navigation";
 
 import { getAdminRangeOverviewData } from "@/lib/aggregates";
+import { AdminCollapsibleSection } from "@/components/admin-collapsible-section";
+import { AdminExpensesSummary } from "@/components/admin-expenses-summary";
 import { AdminGoalsSummary } from "@/components/admin-goals-summary";
 import { AdminInvoicesSummary } from "@/components/admin-invoices-summary";
 import { AdminTimeOffSummary } from "@/components/admin-time-off-summary";
 import { DateRangePresetHeader } from "@/components/date-range-preset-header";
 import { ExportDownloadButton } from "@/components/export-download-button";
 import { AppNav } from "@/components/nav";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Role } from "@/lib/db/schema";
@@ -122,14 +123,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
     <div className="space-y-5">
       <AppNav role={session.user.role} user={session.user} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Monthly Employee hours report</CardTitle>
-          <CardDescription>
-            Daily hours and totals based on selected filter dates ({selectedFrom} to {selectedTo}).
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <AdminCollapsibleSection
+        title="Weekly Employee Hours Report"
+        description={`Daily hours and totals based on selected filter dates (${selectedFrom} to ${selectedTo}).`}
+      >
+        <div className="space-y-3">
           <DateRangePresetHeader initialFrom={selectedFrom} initialTo={selectedTo} weekStartsOn={normalizedWeekStart} />
 
           <div className="space-y-2 md:hidden">
@@ -196,15 +194,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
               </tbody>
             </table>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </AdminCollapsibleSection>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>People</CardTitle>
-          <CardDescription>Active organization members, roles, and monthly CSV export for the current month.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
+      <AdminCollapsibleSection
+        defaultOpen={false}
+        title="People Time Tracking"
+        description="Active organization members, roles, and monthly CSV export for the current month."
+      >
+        <div className="space-y-2">
           {members.map((member: any) => (
             <div
               key={member.id}
@@ -227,50 +225,57 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
               </div>
             </div>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </AdminCollapsibleSection>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Monthly Hours export</CardTitle>
-          <CardDescription>Download all employees monthly hour totals for the current month.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ExportDownloadButton
-            href={`/api/exports/payroll.csv?from=${exportFrom}&to=${exportTo}`}
-            label="Download all employees monthly CSV"
-          />
-        </CardContent>
-      </Card>
+      <AdminCollapsibleSection
+        defaultOpen={false}
+        title="Monthly Hours export"
+        description="Download all employees monthly hour totals for the current month."
+      >
+        <ExportDownloadButton
+          href={`/api/exports/payroll.csv?from=${exportFrom}&to=${exportTo}`}
+          label="Download all employees monthly CSV"
+        />
+      </AdminCollapsibleSection>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Time off</CardTitle>
-          <CardDescription>
-            Total requested days by employee. Open details to inspect the exact saved dates.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AdminTimeOffSummary members={memberRows} />
-        </CardContent>
-      </Card>
+      <AdminCollapsibleSection
+        defaultOpen={false}
+        title="Time off"
+        description="Total requested days by employee. Open details to inspect the exact saved dates."
+      >
+        <AdminTimeOffSummary members={memberRows} />
+      </AdminCollapsibleSection>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Invoices</CardTitle>
-          <CardDescription>Monthly invoice coverage by employee, including missing and uploaded PDF invoices.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AdminInvoicesSummary members={memberRows} />
-        </CardContent>
-      </Card>
+      <AdminCollapsibleSection
+        defaultOpen={false}
+        title="Invoices"
+        description="Monthly invoice coverage by employee, including missing and uploaded PDF invoices."
+      >
+        <AdminInvoicesSummary members={memberRows} />
+      </AdminCollapsibleSection>
 
-      <AdminGoalsSummary
-        quarterLabel={currentQuarter.label}
-        quarterFrom={currentQuarter.from}
-        quarterTo={currentQuarter.to}
-        rows={goalRows}
-      />
+      <AdminCollapsibleSection
+        defaultOpen={false}
+        title="Expenses"
+        description="Monthly reimbursable expenses by employee, including totals owed and full receipt detail."
+      >
+        <AdminExpensesSummary members={memberRows} />
+      </AdminCollapsibleSection>
+
+      <AdminCollapsibleSection
+        defaultOpen={false}
+        title="Goals"
+        description="Current-quarter goals by employee. Open a person to review targets and evaluations inside admin."
+      >
+        <AdminGoalsSummary
+          quarterLabel={currentQuarter.label}
+          quarterFrom={currentQuarter.from}
+          quarterTo={currentQuarter.to}
+          rows={goalRows}
+          embedded
+        />
+      </AdminCollapsibleSection>
     </div>
   );
 }

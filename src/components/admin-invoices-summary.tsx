@@ -3,6 +3,7 @@
 import { format } from "date-fns";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import type { MouseEvent } from "react";
 
 import { InvoicePreviewModal } from "@/components/invoice-preview-modal";
 import { Input } from "@/components/ui/input";
@@ -44,6 +45,7 @@ export function AdminInvoicesSummary({ members }: { members: MemberRow[] }) {
   const [invoices, setInvoices] = useState<AdminInvoice[]>([]);
   const [status, setStatus] = useState("Loading invoice coverage...");
   const [previewInvoice, setPreviewInvoice] = useState<(AdminInvoice & { memberName: string }) | null>(null);
+  const [previewAnchorTop, setPreviewAnchorTop] = useState(24);
 
   const rows = useMemo(() => {
     const byMembership = new Map(invoices.map((invoice) => [invoice.organizationUserId, invoice]));
@@ -103,6 +105,7 @@ export function AdminInvoicesSummary({ members }: { members: MemberRow[] }) {
           title={`${previewInvoice.memberName} · ${previewInvoice.fileName}`}
           src={`/api/admin/invoices/${previewInvoice.id}/download`}
           onClose={() => setPreviewInvoice(null)}
+          anchorTop={previewAnchorTop}
         />
       ) : null}
       <div className="space-y-3 rounded-xl border border-border bg-muted/40 p-3 sm:p-4">
@@ -211,7 +214,12 @@ export function AdminInvoicesSummary({ members }: { members: MemberRow[] }) {
                       type="button"
                       variant="ghost"
                       className="border border-border bg-background"
-                      onClick={() => setPreviewInvoice({ ...invoice, memberName: row.name })}
+                      onClick={(event: MouseEvent<HTMLButtonElement>) => {
+                        const viewportHeight = window.innerHeight;
+                        const nextTop = Math.min(Math.max(16, event.currentTarget.getBoundingClientRect().top - 24), Math.max(16, viewportHeight - 280));
+                        setPreviewAnchorTop(nextTop);
+                        setPreviewInvoice({ ...invoice, memberName: row.name });
+                      }}
                     >
                       View PDF
                     </Button>

@@ -2,7 +2,9 @@
 
 import { addYears, format, startOfYear, subYears } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
+import type { MouseEvent } from "react";
 
+import { AdminModalShell } from "@/components/admin-modal-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/cn";
@@ -72,6 +74,7 @@ export function AdminTimeOffSummary({ members }: { members: MemberRow[] }) {
   const [entries, setEntries] = useState<TimeOffEntry[]>([]);
   const [status, setStatus] = useState("Loading yearly time off...");
   const [selectedRow, setSelectedRow] = useState<(MemberRow & { entries: TimeOffEntry[]; totalDays: number }) | null>(null);
+  const [modalAnchorTop, setModalAnchorTop] = useState(24);
 
   const rows = useMemo(
     () =>
@@ -141,41 +144,29 @@ export function AdminTimeOffSummary({ members }: { members: MemberRow[] }) {
   return (
     <div className="space-y-5">
       {selectedRow ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/30 p-4" role="dialog" aria-modal="true">
-          <div className="w-full max-w-2xl rounded-xl border border-border bg-card p-4 shadow-lg">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <p className="text-base font-semibold text-foreground">{selectedRow.name}</p>
-                <p className="text-sm text-muted-foreground">{selectedRow.email}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {selectedRow.totalDays} requested day{selectedRow.totalDays === 1 ? "" : "s"} between {selectedFrom} and {selectedTo}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedRow(null)}
-                className="inline-flex h-8 items-center rounded-md px-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              {selectedRow.entries.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No requested days inside the selected filter.</p>
-              ) : null}
-              {selectedRow.entries.map((entry) => {
-                const meta = timeOffTypeMeta(entry.type);
-                return (
-                  <div key={entry.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-3">
-                    <span className="text-sm font-medium text-foreground">{formatDateOnly(entry.date, "EEE, MMM d, yyyy")}</span>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${meta.className}`}>{meta.label}</span>
-                  </div>
-                );
-              })}
-            </div>
+        <AdminModalShell
+          title={selectedRow.name}
+          subtitle={`${selectedRow.email} · ${selectedRow.totalDays} requested day${selectedRow.totalDays === 1 ? "" : "s"} between ${selectedFrom} and ${selectedTo}`}
+          onClose={() => setSelectedRow(null)}
+          sizeClassName="max-w-2xl"
+          zIndexClassName="z-[60]"
+          anchorTop={modalAnchorTop}
+        >
+          <div className="space-y-2">
+            {selectedRow.entries.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No requested days inside the selected filter.</p>
+            ) : null}
+            {selectedRow.entries.map((entry) => {
+              const meta = timeOffTypeMeta(entry.type);
+              return (
+                <div key={entry.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-3">
+                  <span className="text-sm font-medium text-foreground">{formatDateOnly(entry.date, "EEE, MMM d, yyyy")}</span>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${meta.className}`}>{meta.label}</span>
+                </div>
+              );
+            })}
           </div>
-        </div>
+        </AdminModalShell>
       ) : null}
 
       <div className="space-y-3 rounded-xl border border-border bg-muted/40 p-3 sm:p-4">
@@ -274,7 +265,16 @@ export function AdminTimeOffSummary({ members }: { members: MemberRow[] }) {
               <span className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">
                 {row.totalDays} day{row.totalDays === 1 ? "" : "s"}
               </span>
-              <Button variant="ghost" className="h-9 border border-border bg-background px-3 text-xs font-semibold" onClick={() => setSelectedRow(row)}>
+              <Button
+                variant="ghost"
+                className="h-9 border border-border bg-background px-3 text-xs font-semibold"
+                onClick={(event: MouseEvent<HTMLButtonElement>) => {
+                  const viewportHeight = window.innerHeight;
+                  const nextTop = Math.min(Math.max(16, event.currentTarget.getBoundingClientRect().top - 24), Math.max(16, viewportHeight - 280));
+                  setModalAnchorTop(nextTop);
+                  setSelectedRow(row);
+                }}
+              >
                 Open details
               </Button>
             </div>

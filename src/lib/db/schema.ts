@@ -146,6 +146,26 @@ export interface InvoiceTable {
   updatedAt: ColumnType<Date, Date | string | undefined, Date | string | undefined>;
 }
 
+export interface ExpenseTable {
+  id: string;
+  organizationId: string;
+  organizationUserId: string;
+  expenseMonth: ColumnType<Date, Date | string, Date | string>;
+  expenseDate: ColumnType<Date, Date | string, Date | string>;
+  reference: string;
+  totalAmount: number;
+  currency: string;
+  fileName: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  fileData: Uint8Array;
+  uploadedByUserId: string;
+  paidAt: Date | null;
+  paidByUserId: string | null;
+  createdAt: ColumnType<Date, Date | string | undefined, never>;
+  updatedAt: ColumnType<Date, Date | string | undefined, Date | string | undefined>;
+}
+
 export interface GoalTable {
   id: string;
   organizationId: string;
@@ -180,5 +200,6 @@ export interface Database {
   CalendarConnection: CalendarConnectionTable;
   TimeOffCalendarSync: TimeOffCalendarSyncTable;
   Invoice: InvoiceTable;
+  Expense: ExpenseTable;
   Goal: GoalTable;
 }
