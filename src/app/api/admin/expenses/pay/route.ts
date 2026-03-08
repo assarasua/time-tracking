@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { markMembershipExpensesPaid } from "@/lib/expenses";
+import { markMembershipExpensesPaid, sendExpensePaidNotification } from "@/lib/expenses";
 import { ensureAdmin, requireSession } from "@/lib/rbac";
 
 export const runtime = "nodejs";
@@ -30,5 +30,35 @@ export async function POST(request: NextRequest) {
     paidByUserId: authResult.session.user.id
   });
 
-  return NextResponse.json({ ok: true, updatedCount: updated.length });
+  let notificationSent = false;
+  let notificationError: string | null = null;
+
+  if (updated.length > 0) {
+    try {
+      const paidAt = updated[0]?.paidAt ?? new Date();
+      const notification = await sendExpensePaidNotification({
+        organizationId: authResult.membership.organizationId,
+        organizationUserId: payload.data.membershipId,
+        month: payload.data.month,
+        paidAt,
+        expenses: updated.map((expense) => ({
+          reference: expense.reference,
+          totalAmount: Number(expense.totalAmount),
+          expenseDate: `${expense.expenseDate}`.slice(0, 10)
+        }))
+      });
+      notificationSent = notification.sent;
+    } catch (error) {
+      notificationError = error instanceof Error ? error.message : "Unable to send paid-expenses email.";
+      console.error("expense_paid_email_failed", {
+        organizationId: authResult.membership.organizationId,
+        membershipId: payload.data.membershipId,
+        month: payload.data.month,
+        updatedCount: updated.length,
+        error: notificationError
+      });
+    }
+  }
+
+  return NextResponse.json({ ok: true, updatedCount: updated.length, notificationSent, notificationError });
 }

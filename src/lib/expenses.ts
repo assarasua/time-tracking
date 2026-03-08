@@ -2,9 +2,13 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
+import { format } from "date-fns";
 import { sql } from "kysely";
 
+import { getAppBaseUrl } from "@/lib/app-config";
+import { formatUsd } from "@/lib/currency";
 import { kysely } from "@/lib/db/kysely";
+import { sendEmail } from "@/lib/email";
 
 const EXPENSE_MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED_EXPENSE_MIME_TYPES = new Set(["application/pdf", "image/png", "image/jpeg"]);
@@ -405,4 +409,113 @@ export async function markMembershipExpensesPaid({
     .where("paidAt", "is", null)
     .returningAll()
     .execute();
+}
+
+type ExpensePaidRecipient = {
+  name: string | null;
+  email: string;
+};
+
+export async function getExpensePaidRecipient({
+  organizationId,
+  organizationUserId
+}: {
+  organizationId: string;
+  organizationUserId: string;
+}) {
+  await ensureExpenseTable();
+
+  const recipient = await kysely
+    .selectFrom("OrganizationUser as ou")
+    .innerJoin("User as u", "u.id", "ou.userId")
+    .select(["u.name as name", "u.email as email"])
+    .where("ou.organizationId", "=", organizationId)
+    .where("ou.id", "=", organizationUserId)
+    .executeTakeFirst();
+
+  return (recipient ?? null) as ExpensePaidRecipient | null;
+}
+
+export async function sendExpensePaidNotification({
+  organizationId,
+  organizationUserId,
+  month,
+  paidAt,
+  expenses
+}: {
+  organizationId: string;
+  organizationUserId: string;
+  month: string;
+  paidAt: Date;
+  expenses: Array<{ reference: string; totalAmount: number; expenseDate: string }>;
+}) {
+  if (!expenses.length) {
+    return { sent: false, reason: "no_expenses" as const };
+  }
+
+  const recipient = await getExpensePaidRecipient({ organizationId, organizationUserId });
+  if (!recipient?.email) {
+    console.info("expense_paid_email_skipped_no_recipient", {
+      organizationId,
+      organizationUserId,
+      month
+    });
+    return { sent: false, reason: "no_recipient" as const };
+  }
+
+  const appUrl = getAppBaseUrl();
+  const userLabel = recipient.name?.trim() || recipient.email;
+  const monthLabel = format(new Date(`${month}-01T12:00:00`), "MMMM yyyy");
+  const paidAtLabel = format(paidAt, "MMM d, yyyy 'at' p");
+  const totalAmount = expenses.reduce((sum, expense) => sum + expense.totalAmount, 0);
+  const subject = `Your ${monthLabel} expenses have been marked as paid`;
+  const expenseLines = expenses
+    .map(
+      (expense) => `
+        <tr>
+          <td style="padding:8px 0;border-top:1px solid #e5e7eb;color:#111827">${expense.expenseDate}</td>
+          <td style="padding:8px 12px;border-top:1px solid #e5e7eb;color:#111827">${expense.reference}</td>
+          <td style="padding:8px 0;border-top:1px solid #e5e7eb;color:#111827;text-align:right">${formatUsd(expense.totalAmount)}</td>
+        </tr>
+      `
+    )
+    .join("");
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;max-width:640px;margin:0 auto;padding:24px">
+      <h2 style="margin:0 0 16px;font-size:22px;color:#111827">Expenses marked as paid</h2>
+      <p style="margin:0 0 16px">Your submitted expenses for <strong>${monthLabel}</strong> have been marked as paid.</p>
+      <div style="border:1px solid #d1d5db;border-radius:12px;padding:16px;background:#f9fafb;margin:0 0 20px">
+        <p style="margin:0 0 8px"><strong>User:</strong> ${userLabel}</p>
+        <p style="margin:0 0 8px"><strong>Month:</strong> ${monthLabel}</p>
+        <p style="margin:0 0 8px"><strong>Paid on:</strong> ${paidAtLabel}</p>
+        <p style="margin:0"><strong>Total paid:</strong> ${formatUsd(totalAmount)}</p>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin:0 0 20px">
+        <thead>
+          <tr>
+            <th style="padding:0 0 8px;text-align:left;color:#6b7280;font-size:12px;text-transform:uppercase">Date</th>
+            <th style="padding:0 12px 8px;text-align:left;color:#6b7280;font-size:12px;text-transform:uppercase">Reference</th>
+            <th style="padding:0 0 8px;text-align:right;color:#6b7280;font-size:12px;text-transform:uppercase">Amount</th>
+          </tr>
+        </thead>
+        <tbody>${expenseLines}</tbody>
+      </table>
+      <p style="margin:0 0 20px">You can review the paid lines in the app:</p>
+      <p style="margin:0 0 24px">
+        <a href="${appUrl}/expenses" target="_blank" rel="noreferrer" style="display:inline-block;background:#375a21;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:600">
+          Open expenses
+        </a>
+      </p>
+      <p style="margin:0;color:#6b7280;font-size:14px">Sent automatically by HuTech Time Tracking.</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: recipient.email,
+    subject,
+    html
+  });
+
+  return { sent: true, reason: null as null };
 }
