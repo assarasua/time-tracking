@@ -8,3 +8,6 @@ prisma/migrations
 coverage
 .DS_Store
 tsconfig.tsbuildinfo
+
+.next.bad.*
+.next.bak.*
