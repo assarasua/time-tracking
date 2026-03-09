@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getMembershipInvoiceForMonth, getMembershipInvoices, normalizeInvoiceMonth, sendInvoiceUploadNotifications, upsertMembershipInvoice, validateInvoiceUpload } from "@/lib/invoices";
+import { getMembershipInvoiceForMonth, getMembershipInvoices, normalizeInvoiceAmount, normalizeInvoiceMonth, sendInvoiceUploadNotifications, upsertMembershipInvoice, validateInvoiceUpload } from "@/lib/invoices";
 import { requireSession } from "@/lib/rbac";
 import { invoiceMonthQuerySchema } from "@/lib/validation";
 
@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const rawMonth = formData.get("month");
+    const rawAmount = formData.get("amount");
     const file = formData.get("file");
 
     if (typeof rawMonth !== "string") {
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
     }
 
     const month = normalizeInvoiceMonth(rawMonth);
+    const totalAmount = normalizeInvoiceAmount(rawAmount);
     validateInvoiceUpload(file);
     const existingInvoice = await getMembershipInvoiceForMonth({
       organizationUserId: authResult.membership.id,
@@ -65,6 +67,7 @@ export async function POST(request: NextRequest) {
       organizationUserId: authResult.membership.id,
       uploadedByUserId: authResult.session.user.id,
       month,
+      totalAmount,
       fileName: file.name,
       mimeType: "application/pdf",
       fileSizeBytes: file.size,
@@ -79,6 +82,7 @@ export async function POST(request: NextRequest) {
       uploaderEmail: authResult.session.user.email,
       membershipId: authResult.membership.id,
       month,
+      totalAmount,
       fileName: invoice.fileName,
       mimeType: "application/pdf",
       fileData: bytes,

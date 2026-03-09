@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { sql } from "kysely";
 
 import { getAppBaseUrl } from "@/lib/app-config";
+import { formatUsd } from "@/lib/currency";
 import { kysely } from "@/lib/db/kysely";
 import { Role } from "@/lib/db/schema";
 import { sendEmail } from "@/lib/email";
@@ -18,10 +19,13 @@ export type InvoiceRecord = {
   organizationId: string;
   organizationUserId: string;
   invoiceMonth: string;
+  totalAmount: number;
   fileName: string;
   mimeType: string;
   fileSizeBytes: number;
   uploadedByUserId: string;
+  paidAt: Date | null;
+  paidByUserId: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -36,6 +40,11 @@ type InvoiceAdminRecipient = {
   membershipId: string;
   email: string;
   name: string | null;
+};
+
+type InvoicePaidRecipient = {
+  name: string | null;
+  email: string;
 };
 
 function toMonthDate(month: string) {
@@ -66,15 +75,22 @@ export async function ensureInvoiceTable() {
       "organizationId" text NOT NULL REFERENCES "Organization"("id") ON DELETE CASCADE,
       "organizationUserId" text NOT NULL REFERENCES "OrganizationUser"("id") ON DELETE CASCADE,
       "invoiceMonth" date NOT NULL,
+      "totalAmount" double precision NOT NULL DEFAULT 0,
       "fileName" text NOT NULL,
       "mimeType" text NOT NULL,
       "fileSizeBytes" integer NOT NULL,
       "fileData" bytea NOT NULL,
       "uploadedByUserId" text NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
+      "paidAt" timestamptz,
+      "paidByUserId" text REFERENCES "User"("id") ON DELETE SET NULL,
       "createdAt" timestamptz NOT NULL DEFAULT now(),
       "updatedAt" timestamptz NOT NULL DEFAULT now()
     )
   `.execute(kysely);
+
+  await sql`ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "totalAmount" double precision NOT NULL DEFAULT 0`.execute(kysely);
+  await sql`ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "paidAt" timestamptz`.execute(kysely);
+  await sql`ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "paidByUserId" text REFERENCES "User"("id") ON DELETE SET NULL`.execute(kysely);
 
   await sql`
     CREATE UNIQUE INDEX IF NOT EXISTS "Invoice_orgUser_month_key"
@@ -119,6 +135,7 @@ export async function upsertMembershipInvoice({
   organizationUserId,
   uploadedByUserId,
   month,
+  totalAmount,
   fileName,
   mimeType,
   fileSizeBytes,
@@ -128,6 +145,7 @@ export async function upsertMembershipInvoice({
   organizationUserId: string;
   uploadedByUserId: string;
   month: string;
+  totalAmount: number;
   fileName: string;
   mimeType: string;
   fileSizeBytes: number;
@@ -142,21 +160,27 @@ export async function upsertMembershipInvoice({
       organizationId,
       organizationUserId,
       invoiceMonth: toMonthDate(month),
+      totalAmount,
       fileName,
       mimeType,
       fileSizeBytes,
       fileData,
       uploadedByUserId,
+      paidAt: null,
+      paidByUserId: null,
       createdAt: new Date(),
       updatedAt: new Date()
     })
     .onConflict((oc) =>
       oc.columns(["organizationUserId", "invoiceMonth"]).doUpdateSet({
+        totalAmount,
         fileName,
         mimeType,
         fileSizeBytes,
         fileData,
         uploadedByUserId,
+        paidAt: null,
+        paidByUserId: null,
         updatedAt: new Date()
       })
     )
@@ -191,6 +215,7 @@ export async function sendInvoiceUploadNotifications({
   uploaderEmail,
   membershipId,
   month,
+  totalAmount,
   fileName,
   mimeType,
   fileData,
@@ -202,6 +227,7 @@ export async function sendInvoiceUploadNotifications({
   uploaderEmail: string;
   membershipId: string;
   month: string;
+  totalAmount: number;
   fileName: string;
   mimeType: string;
   fileData: Uint8Array;
@@ -235,6 +261,7 @@ export async function sendInvoiceUploadNotifications({
         <p style="margin:0 0 8px"><strong>Employee:</strong> ${uploaderLabel}</p>
         <p style="margin:0 0 8px"><strong>Email:</strong> ${uploaderEmail}</p>
         <p style="margin:0 0 8px"><strong>Invoice month:</strong> ${monthLabel}</p>
+        <p style="margin:0 0 8px"><strong>Invoice amount:</strong> $${totalAmount.toFixed(2)}</p>
         <p style="margin:0 0 8px"><strong>${replaced ? "Updated on" : "Uploaded on"}:</strong> ${uploadedAtLabel}</p>
         <p style="margin:0"><strong>File:</strong> ${fileName}</p>
       </div>
@@ -331,6 +358,31 @@ export async function deleteMembershipInvoice({ id, organizationUserId }: { id: 
   );
 }
 
+export async function updateMembershipInvoiceAmount({
+  id,
+  organizationUserId,
+  totalAmount
+}: {
+  id: string;
+  organizationUserId: string;
+  totalAmount: number;
+}) {
+  await ensureInvoiceTable();
+
+  const row = await kysely
+    .updateTable("Invoice")
+    .set({
+      totalAmount,
+      updatedAt: new Date()
+    })
+    .where("id", "=", id)
+    .where("organizationUserId", "=", organizationUserId)
+    .returningAll()
+    .executeTakeFirst();
+
+  return row ? mapInvoiceRow(row) : null;
+}
+
 export async function getAdminInvoiceBinary({ id, organizationId }: { id: string; organizationId: string }) {
   await ensureInvoiceTable();
 
@@ -356,10 +408,13 @@ export async function getAdminInvoicesForMonth({ organizationId, month }: { orga
       "i.organizationId as organizationId",
       "i.organizationUserId as organizationUserId",
       "i.invoiceMonth as invoiceMonth",
+      "i.totalAmount as totalAmount",
       "i.fileName as fileName",
       "i.mimeType as mimeType",
       "i.fileSizeBytes as fileSizeBytes",
       "i.uploadedByUserId as uploadedByUserId",
+      "i.paidAt as paidAt",
+      "i.paidByUserId as paidByUserId",
       "i.createdAt as createdAt",
       "i.updatedAt as updatedAt",
       "u.name as userName",
@@ -385,6 +440,19 @@ export function normalizeInvoiceMonth(month: string) {
   return month;
 }
 
+export function normalizeInvoiceAmount(rawAmount: FormDataEntryValue | null) {
+  if (typeof rawAmount !== "string" || !rawAmount.trim()) {
+    throw new Error("Invoice amount is required.");
+  }
+
+  const amount = Number(rawAmount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Invoice amount must be greater than 0.");
+  }
+
+  return Math.round(amount * 100) / 100;
+}
+
 export function validateInvoiceUpload(file: File | null) {
   if (!file) {
     throw new Error("Select a PDF invoice to upload.");
@@ -402,4 +470,111 @@ export function validateInvoiceUpload(file: File | null) {
   if (file.size > INVOICE_MAX_BYTES) {
     throw new Error("Invoice file exceeds the 10 MB limit.");
   }
+}
+
+export async function markInvoicePaid({
+  invoiceId,
+  organizationId,
+  paidByUserId
+}: {
+  invoiceId: string;
+  organizationId: string;
+  paidByUserId: string;
+}) {
+  await ensureInvoiceTable();
+
+  return (
+    (await kysely
+      .updateTable("Invoice")
+      .set({
+        paidAt: new Date(),
+        paidByUserId,
+        updatedAt: new Date()
+      })
+      .where("id", "=", invoiceId)
+      .where("organizationId", "=", organizationId)
+      .where("paidAt", "is", null)
+      .returningAll()
+      .executeTakeFirst()) ?? null
+  );
+}
+
+export async function getInvoicePaidRecipient({
+  organizationId,
+  organizationUserId
+}: {
+  organizationId: string;
+  organizationUserId: string;
+}) {
+  await ensureInvoiceTable();
+
+  const recipient = await kysely
+    .selectFrom("OrganizationUser as ou")
+    .innerJoin("User as u", "u.id", "ou.userId")
+    .select(["u.name as name", "u.email as email"])
+    .where("ou.organizationId", "=", organizationId)
+    .where("ou.id", "=", organizationUserId)
+    .executeTakeFirst();
+
+  return (recipient ?? null) as InvoicePaidRecipient | null;
+}
+
+export async function sendInvoicePaidNotification({
+  organizationId,
+  organizationUserId,
+  month,
+  totalAmount,
+  paidAt,
+  fileName
+}: {
+  organizationId: string;
+  organizationUserId: string;
+  month: string;
+  totalAmount: number;
+  paidAt: Date;
+  fileName: string;
+}) {
+  const recipient = await getInvoicePaidRecipient({ organizationId, organizationUserId });
+  if (!recipient?.email) {
+    console.info("invoice_paid_email_skipped_no_recipient", {
+      organizationId,
+      organizationUserId,
+      month
+    });
+    return { sent: false, reason: "no_recipient" as const };
+  }
+
+  const userLabel = recipient.name?.trim() || recipient.email;
+  const monthLabel = format(new Date(`${month}-01T12:00:00`), "MMMM yyyy");
+  const paidAtLabel = format(paidAt, "MMM d, yyyy 'at' p");
+  const appUrl = getAppBaseUrl();
+  const subject = `Your invoice for ${monthLabel} has been marked as paid`;
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;max-width:640px;margin:0 auto;padding:24px">
+      <h2 style="margin:0 0 16px;font-size:22px;color:#111827">Invoice marked as paid</h2>
+      <p style="margin:0 0 16px">Your monthly invoice has been marked as paid in HuTech Time Tracking.</p>
+      <div style="border:1px solid #d1d5db;border-radius:12px;padding:16px;background:#f9fafb;margin:0 0 20px">
+        <p style="margin:0 0 8px"><strong>User:</strong> ${userLabel}</p>
+        <p style="margin:0 0 8px"><strong>Invoice month:</strong> ${monthLabel}</p>
+        <p style="margin:0 0 8px"><strong>Invoice amount:</strong> ${formatUsd(totalAmount)}</p>
+        <p style="margin:0 0 8px"><strong>Paid on:</strong> ${paidAtLabel}</p>
+        <p style="margin:0"><strong>File:</strong> ${fileName}</p>
+      </div>
+      <p style="margin:0 0 20px">You can review the invoice in the app:</p>
+      <p style="margin:0 0 24px">
+        <a href="${appUrl}/invoices" target="_blank" rel="noreferrer" style="display:inline-block;background:#375a21;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:600">
+          Open invoices
+        </a>
+      </p>
+      <p style="margin:0;color:#6b7280;font-size:14px">Sent automatically by HuTech Time Tracking.</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: recipient.email,
+    subject,
+    html
+  });
+
+  return { sent: true, reason: null as null };
 }

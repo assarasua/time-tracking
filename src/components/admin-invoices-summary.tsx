@@ -9,6 +9,7 @@ import { InvoicePreviewModal } from "@/components/invoice-preview-modal";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
+import { formatUsd } from "@/lib/currency";
 import { formatFileSize } from "@/lib/file-size";
 import {
   formatMonthKey,
@@ -27,8 +28,10 @@ type AdminInvoice = {
   id: string;
   organizationUserId: string;
   invoiceMonth: string;
+  totalAmount: number;
   fileName: string;
   fileSizeBytes: number;
+  paidAt: string | null;
   updatedAt: string;
 };
 
@@ -44,6 +47,7 @@ export function AdminInvoicesSummary({ members }: { members: MemberRow[] }) {
   const [mode, setMode] = useState<MonthSelectionMode>("previous");
   const [invoices, setInvoices] = useState<AdminInvoice[]>([]);
   const [status, setStatus] = useState("Loading invoice coverage...");
+  const [busyInvoiceId, setBusyInvoiceId] = useState<string | null>(null);
   const [previewInvoice, setPreviewInvoice] = useState<(AdminInvoice & { memberName: string }) | null>(null);
   const [previewAnchorTop, setPreviewAnchorTop] = useState(24);
 
@@ -94,6 +98,30 @@ export function AdminInvoicesSummary({ members }: { members: MemberRow[] }) {
     if (!nextMonth) return;
     setMode("custom");
     setMonth(nextMonth);
+  }
+
+  async function handleMarkPaid(invoiceId: string) {
+    setBusyInvoiceId(invoiceId);
+    setStatus("Marking invoice as paid...");
+    try {
+      const response = await fetch("/api/admin/invoices/pay", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ invoiceId })
+      });
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error ?? "Unable to mark invoice as paid.");
+      }
+
+      await loadInvoices(month);
+      setStatus(`Invoice marked as paid for ${month}.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to mark invoice as paid.");
+    } finally {
+      setBusyInvoiceId(null);
+    }
   }
 
   const monthLabel = formatMonthKey(month);
@@ -199,13 +227,26 @@ export function AdminInvoicesSummary({ members }: { members: MemberRow[] }) {
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
                 <div className="text-left sm:text-right">
-                  <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", invoice ? "bg-success text-success-foreground" : isExpectedMonth ? "bg-muted text-foreground" : "bg-accent text-accent-foreground")}>
-                    {invoice ? "Uploaded" : isExpectedMonth ? "Missing" : "Not due yet"}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                    <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", invoice ? "bg-success text-success-foreground" : isExpectedMonth ? "bg-muted text-foreground" : "bg-accent text-accent-foreground")}>
+                      {invoice ? "Uploaded" : isExpectedMonth ? "Missing" : "Not due yet"}
+                    </span>
+                    {invoice ? (
+                      <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", invoice.paidAt ? "bg-primary text-primary-foreground" : "bg-muted text-foreground")}>
+                        {invoice.paidAt ? "Paid" : "Unpaid"}
+                      </span>
+                    ) : null}
+                  </div>
                   {invoice ? (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {invoice.fileName} · {formatFileSize(invoice.fileSizeBytes)} · {format(new Date(invoice.updatedAt), "MMM d, yyyy p")}
-                    </p>
+                    <div className="mt-2 space-y-1">
+                      <p className="text-sm font-semibold text-foreground">{formatUsd(invoice.totalAmount)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {invoice.fileName} · {formatFileSize(invoice.fileSizeBytes)} · {format(new Date(invoice.updatedAt), "MMM d, yyyy p")}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {invoice.paidAt ? `Paid ${format(new Date(invoice.paidAt), "MMM d, yyyy p")}` : "Pending payment"}
+                      </p>
+                    </div>
                   ) : null}
                 </div>
                 {invoice ? (
@@ -226,6 +267,17 @@ export function AdminInvoicesSummary({ members }: { members: MemberRow[] }) {
                     <Link href={`/api/admin/invoices/${invoice.id}/download?download=1`} className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-nav-selected">
                       Download PDF
                     </Link>
+                    {!invoice.paidAt ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="border border-border bg-background"
+                        onClick={() => void handleMarkPaid(invoice.id)}
+                        disabled={busyInvoiceId === invoice.id}
+                      >
+                        {busyInvoiceId === invoice.id ? "Processing..." : "Mark as paid"}
+                      </Button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

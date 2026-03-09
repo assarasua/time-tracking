@@ -137,11 +137,14 @@ export interface InvoiceTable {
   organizationId: string;
   organizationUserId: string;
   invoiceMonth: ColumnType<Date, Date | string, Date | string>;
+  totalAmount: number;
   fileName: string;
   mimeType: string;
   fileSizeBytes: number;
   fileData: Uint8Array;
   uploadedByUserId: string;
+  paidAt: Date | null;
+  paidByUserId: string | null;
   createdAt: ColumnType<Date, Date | string | undefined, never>;
   updatedAt: ColumnType<Date, Date | string | undefined, Date | string | undefined>;
 }

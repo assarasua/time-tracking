@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/cn";
+import { formatUsd } from "@/lib/currency";
 import { formatFileSize } from "@/lib/file-size";
 import {
   formatMonthKey,
@@ -21,9 +22,11 @@ import {
 type InvoiceRecord = {
   id: string;
   invoiceMonth: string;
+  totalAmount: number;
   fileName: string;
   fileSizeBytes: number;
   mimeType: string;
+  paidAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -40,6 +43,9 @@ export function InvoiceBoard() {
   const [mode, setMode] = useState<MonthSelectionMode>("previous");
   const [invoice, setInvoice] = useState<InvoiceRecord | null>(null);
   const [allInvoices, setAllInvoices] = useState<InvoiceRecord[]>([]);
+  const [amount, setAmount] = useState("");
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
+  const [editingAmount, setEditingAmount] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [status, setStatus] = useState("Loading invoice status...");
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +80,7 @@ export function InvoiceBoard() {
       const selectedPayload = (await selectedResponse.json()) as { invoice: InvoiceRecord | null };
       const allPayload = (await allResponse.json()) as { invoices: InvoiceRecord[] };
       setInvoice(selectedPayload.invoice);
+      setAmount(selectedPayload.invoice ? String(selectedPayload.invoice.totalAmount) : "");
       setAllInvoices(allPayload.invoices);
       setStatus(
         selectedPayload.invoice
@@ -118,6 +125,7 @@ export function InvoiceBoard() {
     try {
       const formData = new FormData();
       formData.append("month", month);
+      formData.append("amount", amount);
       formData.append("file", selectedFile);
 
       const response = await fetch("/api/invoices", {
@@ -138,6 +146,7 @@ export function InvoiceBoard() {
         return nextInvoices.sort((left, right) => right.invoiceMonth.localeCompare(left.invoiceMonth));
       });
       setSelectedFile(null);
+      setAmount("");
       if (fileInputRef.current) fileInputRef.current.value = "";
       setStatus(`Invoice saved for ${month}.`);
     } catch (uploadError) {
@@ -174,6 +183,38 @@ export function InvoiceBoard() {
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Unable to delete invoice.");
       setStatus("Invoice delete failed.");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function handleUpdateAmount(targetInvoice: InvoiceRecord) {
+    setIsBusy(true);
+    setError(null);
+    setStatus(`Updating amount for ${targetInvoice.invoiceMonth}...`);
+
+    try {
+      const response = await fetch(`/api/invoices/${targetInvoice.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ amount: editingAmount })
+      });
+      const payload = (await response.json()) as { ok?: boolean; invoice?: InvoiceRecord; error?: string };
+      if (!response.ok || !payload.ok || !payload.invoice) {
+        throw new Error(payload.error ?? "Unable to update invoice amount.");
+      }
+
+      setInvoice((current) => (current?.id === payload.invoice!.id ? payload.invoice! : current));
+      setAllInvoices((currentInvoices) =>
+        currentInvoices.map((currentInvoice) => (currentInvoice.id === payload.invoice!.id ? payload.invoice! : currentInvoice))
+      );
+      setEditingInvoiceId(null);
+      setEditingAmount("");
+      setStatus(`Invoice amount updated for ${targetInvoice.invoiceMonth}.`);
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "Unable to update invoice amount.");
+      setStatus("Invoice amount update failed.");
     } finally {
       setIsBusy(false);
     }
@@ -289,7 +330,11 @@ export function InvoiceBoard() {
                     <p className="text-muted-foreground">No PDF selected yet.</p>
                   )}
                 </div>
-                <Button type="button" className="w-full" onClick={() => void handleUpload()} disabled={!selectedFile || isBusy}>
+                <label className="block space-y-1 text-sm">
+                  <span className="font-medium text-foreground">Invoice amount (USD)</span>
+                  <Input type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" />
+                </label>
+                <Button type="button" className="w-full" onClick={() => void handleUpload()} disabled={!selectedFile || !amount || isBusy}>
                   {isBusy ? "Processing..." : invoice ? "Replace invoice" : "Upload invoice"}
                 </Button>
               </div>
@@ -301,9 +346,22 @@ export function InvoiceBoard() {
                 <div className="mt-4 space-y-3 text-sm">
                   <div>
                     <p className="font-medium text-foreground">{invoice.fileName}</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">{formatUsd(invoice.totalAmount)}</p>
                     <p className="text-xs text-muted-foreground">{formatFileSize(invoice.fileSizeBytes)} · Uploaded {format(new Date(invoice.updatedAt), "MMM d, yyyy p")}</p>
+                    <p className="text-xs text-muted-foreground">{invoice.paidAt ? `Paid ${format(new Date(invoice.paidAt), "MMM d, yyyy p")}` : "Unpaid"}</p>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="border border-border bg-background"
+                      onClick={() => {
+                        setEditingInvoiceId(invoice.id);
+                        setEditingAmount(String(invoice.totalAmount));
+                      }}
+                    >
+                      Edit amount
+                    </Button>
                     <Button type="button" variant="ghost" className="border border-border bg-background" onClick={() => setPreviewInvoice(invoice)}>
                       View PDF
                     </Button>
@@ -317,6 +375,22 @@ export function InvoiceBoard() {
                       Delete
                     </Button>
                   </div>
+                  {editingInvoiceId === invoice.id ? (
+                    <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+                      <label className="block space-y-1 text-sm">
+                        <span className="font-medium text-foreground">New amount (USD)</span>
+                        <Input type="number" min="0.01" step="0.01" value={editingAmount} onChange={(event) => setEditingAmount(event.target.value)} />
+                      </label>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Button type="button" onClick={() => void handleUpdateAmount(invoice)} disabled={!editingAmount || isBusy}>
+                          {isBusy ? "Saving..." : "Save amount"}
+                        </Button>
+                        <Button type="button" variant="ghost" className="border border-border bg-background" onClick={() => setEditingInvoiceId(null)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <div className="mt-4 rounded-lg border border-border bg-muted/40 px-3 py-4 text-sm text-muted-foreground">
@@ -349,11 +423,24 @@ export function InvoiceBoard() {
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground">{formatMonthKey(uploadedInvoice.invoiceMonth)}</p>
                       <p className="truncate text-sm text-foreground">{uploadedInvoice.fileName}</p>
+                      <p className="text-sm font-semibold text-foreground">{formatUsd(uploadedInvoice.totalAmount)}</p>
                       <p className="text-xs text-muted-foreground">
                         {formatFileSize(uploadedInvoice.fileSizeBytes)} · Uploaded {format(new Date(uploadedInvoice.updatedAt), "MMM d, yyyy p")}
                       </p>
+                      <p className="text-xs text-muted-foreground">{uploadedInvoice.paidAt ? `Paid ${format(new Date(uploadedInvoice.paidAt), "MMM d, yyyy p")}` : "Unpaid"}</p>
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="border border-border bg-background"
+                        onClick={() => {
+                          setEditingInvoiceId(uploadedInvoice.id);
+                          setEditingAmount(String(uploadedInvoice.totalAmount));
+                        }}
+                      >
+                        Edit amount
+                      </Button>
                       <Button type="button" variant="ghost" className="border border-border bg-background" onClick={() => setPreviewInvoice(uploadedInvoice)}>
                         View PDF
                       </Button>
@@ -367,6 +454,22 @@ export function InvoiceBoard() {
                         Delete
                       </Button>
                     </div>
+                    {editingInvoiceId === uploadedInvoice.id ? (
+                      <div className="space-y-2 rounded-lg border border-border bg-background p-3 sm:min-w-[260px]">
+                        <label className="block space-y-1 text-sm">
+                          <span className="font-medium text-foreground">New amount (USD)</span>
+                          <Input type="number" min="0.01" step="0.01" value={editingAmount} onChange={(event) => setEditingAmount(event.target.value)} />
+                        </label>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Button type="button" onClick={() => void handleUpdateAmount(uploadedInvoice)} disabled={!editingAmount || isBusy}>
+                            {isBusy ? "Saving..." : "Save amount"}
+                          </Button>
+                          <Button type="button" variant="ghost" className="border border-border bg-background" onClick={() => setEditingInvoiceId(null)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>

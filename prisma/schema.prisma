@@ -53,6 +53,7 @@ model User {
   calendarConnections CalendarConnection[]
   timeOffCalendarSync TimeOffCalendarSync[]
   uploadedInvoices    Invoice[]              @relation("InvoiceUploader")
+  paidInvoices        Invoice[]              @relation("InvoicePayer")
   uploadedExpenses    Expense[]              @relation("ExpenseUploader")
   paidExpenses        Expense[]              @relation("ExpensePayer")
   completedGoals      Goal[]                 @relation("GoalCompleter")
@@ -210,16 +211,20 @@ model Invoice {
   organizationId     String
   organizationUserId String
   invoiceMonth       DateTime
+  totalAmount        Float
   fileName           String
   mimeType           String
   fileSizeBytes      Int
   fileData           Bytes
   uploadedByUserId   String
+  paidAt             DateTime?
+  paidByUserId       String?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
   organization       Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   organizationUser   OrganizationUser @relation(fields: [organizationUserId], references: [id], onDelete: Cascade)
   uploadedBy         User             @relation("InvoiceUploader", fields: [uploadedByUserId], references: [id], onDelete: Cascade)
+  paidBy             User?            @relation("InvoicePayer", fields: [paidByUserId], references: [id], onDelete: SetNull)
 
   @@unique([organizationUserId, invoiceMonth])
   @@index([organizationId, invoiceMonth])
