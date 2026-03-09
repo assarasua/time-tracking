@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { markInvoicePaid, sendInvoicePaidNotification } from "@/lib/invoices";
+import { formatInvoiceMonthValue, markInvoicePaid, sendInvoicePaidNotification } from "@/lib/invoices";
 import { ensureAdmin, requireSession } from "@/lib/rbac";
 
 export const runtime = "nodejs";
@@ -34,12 +34,13 @@ export async function POST(request: NextRequest) {
 
   let notificationSent = false;
   let notificationError: string | null = null;
+  const invoiceMonth = formatInvoiceMonthValue(invoice.invoiceMonth);
 
   try {
     const notification = await sendInvoicePaidNotification({
       organizationId: authResult.membership.organizationId,
       organizationUserId: invoice.organizationUserId,
-      month: `${invoice.invoiceMonth}`.slice(0, 7),
+      month: invoiceMonth,
       totalAmount: Number(invoice.totalAmount),
       paidAt: invoice.paidAt ?? new Date(),
       fileName: invoice.fileName
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
       organizationId: authResult.membership.organizationId,
       invoiceId: payload.data.invoiceId,
       organizationUserId: invoice.organizationUserId,
-      month: `${invoice.invoiceMonth}`.slice(0, 7),
+      month: invoiceMonth,
       error: notificationError
     });
   }

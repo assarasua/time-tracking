@@ -61,6 +61,10 @@ function toMonthKey(value: string | Date) {
   return `${year}-${month}`;
 }
 
+export function formatInvoiceMonthValue(value: string | Date) {
+  return toMonthKey(value);
+}
+
 function mapInvoiceRow(row: any): InvoiceRecord {
   return {
     ...row,
