@@ -507,7 +507,7 @@ export async function sendExpensePaidNotification({
           Open expenses
         </a>
       </p>
-      <p style="margin:0;color:#6b7280;font-size:14px">Sent automatically by HuTech Time Tracking.</p>
+      <p style="margin:0;color:#6b7280;font-size:14px">Sent automatically by Hutech HR Hub.</p>
     </div>
   `;
 

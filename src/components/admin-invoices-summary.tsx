@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { formatUsd } from "@/lib/currency";
+import { formatDateOnly } from "@/lib/date-only";
 import { formatFileSize } from "@/lib/file-size";
 import {
   formatMonthKey,
@@ -28,6 +29,7 @@ type AdminInvoice = {
   id: string;
   organizationUserId: string;
   invoiceMonth: string;
+  invoiceDate: string;
   totalAmount: number;
   fileName: string;
   fileSizeBytes: number;
@@ -240,6 +242,7 @@ export function AdminInvoicesSummary({ members }: { members: MemberRow[] }) {
                   {invoice ? (
                     <div className="mt-2 space-y-1">
                       <p className="text-sm font-semibold text-foreground">{formatUsd(invoice.totalAmount)}</p>
+                      <p className="text-xs text-muted-foreground">Invoice date {formatDateOnly(invoice.invoiceDate, "MMM d, yyyy")}</p>
                       <p className="text-xs text-muted-foreground">
                         {invoice.fileName} · {formatFileSize(invoice.fileSizeBytes)} · {format(new Date(invoice.updatedAt), "MMM d, yyyy p")}
                       </p>

@@ -19,6 +19,7 @@ export type InvoiceRecord = {
   organizationId: string;
   organizationUserId: string;
   invoiceMonth: string;
+  invoiceDate: string;
   totalAmount: number;
   fileName: string;
   mimeType: string;
@@ -51,6 +52,11 @@ function toMonthDate(month: string) {
   return new Date(`${month}-01T00:00:00.000Z`);
 }
 
+function toDateOnly(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0, 0);
+}
+
 function toMonthKey(value: string | Date) {
   if (typeof value === "string") {
     return /^\d{4}-\d{2}$/.test(value) ? value : value.slice(0, 7);
@@ -65,10 +71,23 @@ export function formatInvoiceMonthValue(value: string | Date) {
   return toMonthKey(value);
 }
 
+function toDateKey(value: string | Date) {
+  if (typeof value === "string") {
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : value.slice(0, 10);
+  }
+
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function mapInvoiceRow(row: any): InvoiceRecord {
   return {
     ...row,
-    invoiceMonth: toMonthKey(row.invoiceMonth)
+    invoiceMonth: toMonthKey(row.invoiceMonth),
+    invoiceDate: toDateKey(row.invoiceDate),
+    totalAmount: Number(row.totalAmount)
   };
 }
 
@@ -79,6 +98,7 @@ export async function ensureInvoiceTable() {
       "organizationId" text NOT NULL REFERENCES "Organization"("id") ON DELETE CASCADE,
       "organizationUserId" text NOT NULL REFERENCES "OrganizationUser"("id") ON DELETE CASCADE,
       "invoiceMonth" date NOT NULL,
+      "invoiceDate" date NOT NULL,
       "totalAmount" double precision NOT NULL DEFAULT 0,
       "fileName" text NOT NULL,
       "mimeType" text NOT NULL,
@@ -93,6 +113,8 @@ export async function ensureInvoiceTable() {
   `.execute(kysely);
 
   await sql`ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "totalAmount" double precision NOT NULL DEFAULT 0`.execute(kysely);
+  await sql`ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "invoiceDate" date`.execute(kysely);
+  await sql`UPDATE "Invoice" SET "invoiceDate" = "invoiceMonth" WHERE "invoiceDate" IS NULL`.execute(kysely);
   await sql`ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "paidAt" timestamptz`.execute(kysely);
   await sql`ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "paidByUserId" text REFERENCES "User"("id") ON DELETE SET NULL`.execute(kysely);
 
@@ -139,6 +161,7 @@ export async function upsertMembershipInvoice({
   organizationUserId,
   uploadedByUserId,
   month,
+  invoiceDate,
   totalAmount,
   fileName,
   mimeType,
@@ -149,6 +172,7 @@ export async function upsertMembershipInvoice({
   organizationUserId: string;
   uploadedByUserId: string;
   month: string;
+  invoiceDate: string;
   totalAmount: number;
   fileName: string;
   mimeType: string;
@@ -164,6 +188,7 @@ export async function upsertMembershipInvoice({
       organizationId,
       organizationUserId,
       invoiceMonth: toMonthDate(month),
+      invoiceDate: toDateOnly(invoiceDate),
       totalAmount,
       fileName,
       mimeType,
@@ -177,6 +202,7 @@ export async function upsertMembershipInvoice({
     })
     .onConflict((oc) =>
       oc.columns(["organizationUserId", "invoiceMonth"]).doUpdateSet({
+        invoiceDate: toDateOnly(invoiceDate),
         totalAmount,
         fileName,
         mimeType,
@@ -219,6 +245,7 @@ export async function sendInvoiceUploadNotifications({
   uploaderEmail,
   membershipId,
   month,
+  invoiceDate,
   totalAmount,
   fileName,
   mimeType,
@@ -231,6 +258,7 @@ export async function sendInvoiceUploadNotifications({
   uploaderEmail: string;
   membershipId: string;
   month: string;
+  invoiceDate: string;
   totalAmount: number;
   fileName: string;
   mimeType: string;
@@ -252,6 +280,7 @@ export async function sendInvoiceUploadNotifications({
   const uploaderLabel = uploaderName?.trim() || uploaderEmail;
   const monthLabel = format(new Date(`${month}-01T12:00:00`), "MMMM yyyy");
   const uploadedAtLabel = format(uploadedAt, "MMM d, yyyy 'at' p");
+  const invoiceDateLabel = format(toDateOnly(invoiceDate), "MMM d, yyyy");
   const subject = replaced
     ? `${uploaderLabel} replaced the invoice for ${monthLabel}`
     : `${uploaderLabel} uploaded an invoice for ${monthLabel}`;
@@ -259,11 +288,12 @@ export async function sendInvoiceUploadNotifications({
     <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;max-width:640px;margin:0 auto;padding:24px">
       <h2 style="margin:0 0 16px;font-size:22px;color:#111827">${replaced ? "Invoice replaced" : "New invoice uploaded"}</h2>
       <p style="margin:0 0 16px">
-        ${replaced ? "An existing monthly invoice has been replaced in HuTech Time Tracking." : "A new monthly invoice has been uploaded in HuTech Time Tracking."}
+        ${replaced ? "An existing monthly invoice has been replaced in Hutech HR Hub." : "A new monthly invoice has been uploaded in Hutech HR Hub."}
       </p>
       <div style="border:1px solid #d1d5db;border-radius:12px;padding:16px;background:#f9fafb;margin:0 0 20px">
         <p style="margin:0 0 8px"><strong>Employee:</strong> ${uploaderLabel}</p>
         <p style="margin:0 0 8px"><strong>Email:</strong> ${uploaderEmail}</p>
+        <p style="margin:0 0 8px"><strong>Invoice date:</strong> ${invoiceDateLabel}</p>
         <p style="margin:0 0 8px"><strong>Invoice month:</strong> ${monthLabel}</p>
         <p style="margin:0 0 8px"><strong>Invoice amount:</strong> $${totalAmount.toFixed(2)}</p>
         <p style="margin:0 0 8px"><strong>${replaced ? "Updated on" : "Uploaded on"}:</strong> ${uploadedAtLabel}</p>
@@ -281,7 +311,7 @@ export async function sendInvoiceUploadNotifications({
         The invoice PDF is attached to this email for quick review.
       </p>
       <p style="margin:0;color:#6b7280;font-size:14px">
-        Sent automatically by HuTech Time Tracking.
+        Sent automatically by Hutech HR Hub.
       </p>
     </div>
   `;
@@ -412,6 +442,7 @@ export async function getAdminInvoicesForMonth({ organizationId, month }: { orga
       "i.organizationId as organizationId",
       "i.organizationUserId as organizationUserId",
       "i.invoiceMonth as invoiceMonth",
+      "i.invoiceDate as invoiceDate",
       "i.totalAmount as totalAmount",
       "i.fileName as fileName",
       "i.mimeType as mimeType",
@@ -433,7 +464,8 @@ export async function getAdminInvoicesForMonth({ organizationId, month }: { orga
 
   return rows.map((row) => ({
     ...row,
-    invoiceMonth: toMonthKey(row.invoiceMonth)
+    invoiceMonth: toMonthKey(row.invoiceMonth),
+    invoiceDate: toDateKey(row.invoiceDate)
   })) as AdminInvoiceRecord[];
 }
 
@@ -455,6 +487,14 @@ export function normalizeInvoiceAmount(rawAmount: FormDataEntryValue | null) {
   }
 
   return Math.round(amount * 100) / 100;
+}
+
+export function normalizeInvoiceDate(date: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new Error("Invoice date is required.");
+  }
+
+  return date;
 }
 
 export function validateInvoiceUpload(file: File | null) {
@@ -556,7 +596,7 @@ export async function sendInvoicePaidNotification({
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;max-width:640px;margin:0 auto;padding:24px">
       <h2 style="margin:0 0 16px;font-size:22px;color:#111827">Invoice marked as paid</h2>
-      <p style="margin:0 0 16px">Your monthly invoice has been marked as paid in HuTech Time Tracking.</p>
+      <p style="margin:0 0 16px">Your monthly invoice has been marked as paid in Hutech HR Hub.</p>
       <div style="border:1px solid #d1d5db;border-radius:12px;padding:16px;background:#f9fafb;margin:0 0 20px">
         <p style="margin:0 0 8px"><strong>User:</strong> ${userLabel}</p>
         <p style="margin:0 0 8px"><strong>Invoice month:</strong> ${monthLabel}</p>
@@ -570,7 +610,7 @@ export async function sendInvoicePaidNotification({
           Open invoices
         </a>
       </p>
-      <p style="margin:0;color:#6b7280;font-size:14px">Sent automatically by HuTech Time Tracking.</p>
+      <p style="margin:0;color:#6b7280;font-size:14px">Sent automatically by Hutech HR Hub.</p>
     </div>
   `;
 

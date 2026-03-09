@@ -137,6 +137,7 @@ export interface InvoiceTable {
   organizationId: string;
   organizationUserId: string;
   invoiceMonth: ColumnType<Date, Date | string, Date | string>;
+  invoiceDate: ColumnType<Date, Date | string, Date | string>;
   totalAmount: number;
   fileName: string;
   mimeType: string;

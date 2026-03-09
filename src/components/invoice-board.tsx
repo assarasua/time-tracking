@@ -10,18 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/cn";
 import { formatUsd } from "@/lib/currency";
+import { formatDateOnly } from "@/lib/date-only";
 import { formatFileSize } from "@/lib/file-size";
-import {
-  formatMonthKey,
-  getMonthModeLabel,
-  getPreviousMonthRange,
-  getRangeForMonth,
-  type MonthSelectionMode
-} from "@/lib/month-range";
+import { formatMonthKey, getPreviousMonthRange } from "@/lib/month-range";
 
 type InvoiceRecord = {
   id: string;
   invoiceMonth: string;
+  invoiceDate: string;
   totalAmount: number;
   fileName: string;
   fileSizeBytes: number;
@@ -31,16 +27,13 @@ type InvoiceRecord = {
   updatedAt: string;
 };
 
-const PRESETS: MonthSelectionMode[] = ["previous"];
-
 function isExpectedInvoiceMonth(month: string) {
   return month <= getPreviousMonthRange().month;
 }
 
 export function InvoiceBoard() {
   const previous = getPreviousMonthRange();
-  const [month, setMonth] = useState(previous.month);
-  const [mode, setMode] = useState<MonthSelectionMode>("previous");
+  const [invoiceDate, setInvoiceDate] = useState(previous.to);
   const [invoice, setInvoice] = useState<InvoiceRecord | null>(null);
   const [allInvoices, setAllInvoices] = useState<InvoiceRecord[]>([]);
   const [amount, setAmount] = useState("");
@@ -53,7 +46,7 @@ export function InvoiceBoard() {
   const [previewInvoice, setPreviewInvoice] = useState<InvoiceRecord | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const range = useMemo(() => getRangeForMonth(month), [month]);
+  const month = useMemo(() => invoiceDate.slice(0, 7), [invoiceDate]);
   const monthLabel = useMemo(() => formatMonthKey(month), [month]);
   const isExpectedMonth = useMemo(() => isExpectedInvoiceMonth(month), [month]);
 
@@ -101,22 +94,8 @@ export function InvoiceBoard() {
     void loadInvoice(month);
   }, [month]);
 
-  function applyPreset(nextMode: MonthSelectionMode) {
-    const nextRange = getPreviousMonthRange();
-    setMode(nextMode);
-    setMonth(nextRange.month);
-    setSelectedFile(null);
-  }
-
-  function applyCustomMonth(nextMonth: string) {
-    if (!nextMonth) return;
-    setMode("custom");
-    setMonth(nextMonth);
-    setSelectedFile(null);
-  }
-
   async function handleUpload() {
-    if (!selectedFile) return;
+    if (!selectedFile || !invoiceDate) return;
 
     setIsBusy(true);
     setError(null);
@@ -125,6 +104,7 @@ export function InvoiceBoard() {
     try {
       const formData = new FormData();
       formData.append("month", month);
+      formData.append("invoiceDate", invoiceDate);
       formData.append("amount", amount);
       formData.append("file", selectedFile);
 
@@ -232,66 +212,9 @@ export function InvoiceBoard() {
       <Card>
         <CardHeader>
           <CardTitle>Invoices</CardTitle>
-          <CardDescription>Upload one PDF invoice per month. Re-uploading the same month replaces the existing file.</CardDescription>
+          <CardDescription>Upload one PDF invoice per month using the invoice date. Re-uploading the same month replaces the existing file.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-3 rounded-xl border border-border bg-muted/40 p-3 sm:p-4">
-            <div className="relative">
-              <div className="pointer-events-none absolute inset-y-0 left-0 w-4 bg-gradient-to-r from-muted/90 to-transparent sm:hidden" />
-              <div className="pointer-events-none absolute inset-y-0 right-0 w-4 bg-gradient-to-l from-muted/90 to-transparent sm:hidden" />
-              <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none]" role="group" aria-label="Invoice month presets">
-                <div className="inline-flex min-w-max snap-x snap-mandatory items-center gap-2">
-                  {PRESETS.map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => applyPreset(preset)}
-                      aria-pressed={mode === preset}
-                      className={cn(
-                        "inline-flex h-9 shrink-0 snap-start items-center rounded-full px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                        mode === preset
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
-                      )}
-                    >
-                      {getMonthModeLabel(preset)}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setMode("custom")}
-                    aria-pressed={mode === "custom"}
-                    className={cn(
-                      "inline-flex h-9 shrink-0 snap-start items-center rounded-full px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                      mode === "custom"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-background text-muted-foreground hover:bg-accent hover:text-foreground"
-                    )}
-                  >
-                    Custom month
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-border bg-background px-3 py-2.5 text-sm">
-              <p className="leading-tight">
-                <span className="font-semibold text-foreground">Selected month:</span>{" "}
-                <span className="font-medium text-foreground">{monthLabel}</span>
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {range.from} to {range.to}
-              </p>
-            </div>
-
-            {mode === "custom" ? (
-              <label className="block space-y-1 text-sm">
-                <span className="font-medium text-foreground">Month</span>
-                <Input type="month" value={month} className="min-w-0" onChange={(event) => applyCustomMonth(event.target.value)} />
-              </label>
-            ) : null}
-          </div>
-
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
             <div className="rounded-xl border border-border bg-background p-4">
               <div className="flex items-start justify-between gap-3">
@@ -310,6 +233,11 @@ export function InvoiceBoard() {
               </div>
 
               <div className="mt-4 space-y-3">
+                <label className="block space-y-1 text-sm">
+                  <span className="font-medium text-foreground">Invoice date</span>
+                  <Input type="date" value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} />
+                  <p className="text-xs text-muted-foreground">The invoice month is derived from the selected date: {monthLabel}.</p>
+                </label>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -334,18 +262,22 @@ export function InvoiceBoard() {
                   <span className="font-medium text-foreground">Invoice amount (USD)</span>
                   <Input type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" />
                 </label>
-                <Button type="button" className="w-full" onClick={() => void handleUpload()} disabled={!selectedFile || !amount || isBusy}>
+                <Button type="button" className="w-full" onClick={() => void handleUpload()} disabled={!selectedFile || !amount || !invoiceDate || isBusy}>
                   {isBusy ? "Processing..." : invoice ? "Replace invoice" : "Upload invoice"}
                 </Button>
               </div>
             </div>
 
             <div className="rounded-xl border border-border bg-background p-4">
-              <p className="text-sm font-semibold text-foreground">Selected month status</p>
+              <p className="text-sm font-semibold text-foreground">Selected invoice status</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {invoiceDate ? `${formatDateOnly(invoiceDate, "MMMM d, yyyy")} · ${monthLabel}` : "Choose an invoice date to target a month."}
+              </p>
               {invoice ? (
                 <div className="mt-4 space-y-3 text-sm">
                   <div>
                     <p className="font-medium text-foreground">{invoice.fileName}</p>
+                    <p className="text-xs text-muted-foreground">Invoice date {formatDateOnly(invoice.invoiceDate, "MMM d, yyyy")}</p>
                     <p className="mt-1 text-sm font-semibold text-foreground">{formatUsd(invoice.totalAmount)}</p>
                     <p className="text-xs text-muted-foreground">{formatFileSize(invoice.fileSizeBytes)} · Uploaded {format(new Date(invoice.updatedAt), "MMM d, yyyy p")}</p>
                     <p className="text-xs text-muted-foreground">{invoice.paidAt ? `Paid ${format(new Date(invoice.paidAt), "MMM d, yyyy p")}` : "Unpaid"}</p>
@@ -422,6 +354,7 @@ export function InvoiceBoard() {
                   <div key={uploadedInvoice.id} className="flex flex-col gap-3 rounded-xl border border-border bg-muted/30 p-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground">{formatMonthKey(uploadedInvoice.invoiceMonth)}</p>
+                      <p className="text-xs text-muted-foreground">Invoice date {formatDateOnly(uploadedInvoice.invoiceDate, "MMM d, yyyy")}</p>
                       <p className="truncate text-sm text-foreground">{uploadedInvoice.fileName}</p>
                       <p className="text-sm font-semibold text-foreground">{formatUsd(uploadedInvoice.totalAmount)}</p>
                       <p className="text-xs text-muted-foreground">

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getMembershipInvoiceForMonth, getMembershipInvoices, normalizeInvoiceAmount, normalizeInvoiceMonth, sendInvoiceUploadNotifications, upsertMembershipInvoice, validateInvoiceUpload } from "@/lib/invoices";
+import { getMembershipInvoiceForMonth, getMembershipInvoices, normalizeInvoiceAmount, normalizeInvoiceDate, normalizeInvoiceMonth, sendInvoiceUploadNotifications, upsertMembershipInvoice, validateInvoiceUpload } from "@/lib/invoices";
 import { requireSession } from "@/lib/rbac";
 import { invoiceMonthQuerySchema } from "@/lib/validation";
 
@@ -42,18 +42,16 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const rawMonth = formData.get("month");
+    const rawInvoiceDate = formData.get("invoiceDate");
     const rawAmount = formData.get("amount");
     const file = formData.get("file");
-
-    if (typeof rawMonth !== "string") {
-      return NextResponse.json({ error: "Invoice month is required." }, { status: 400 });
-    }
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "Invoice PDF is required." }, { status: 400 });
     }
 
-    const month = normalizeInvoiceMonth(rawMonth);
+    const invoiceDate = normalizeInvoiceDate(typeof rawInvoiceDate === "string" ? rawInvoiceDate : "");
+    const month = typeof rawMonth === "string" ? normalizeInvoiceMonth(rawMonth) : invoiceDate.slice(0, 7);
     const totalAmount = normalizeInvoiceAmount(rawAmount);
     validateInvoiceUpload(file);
     const existingInvoice = await getMembershipInvoiceForMonth({
@@ -67,6 +65,7 @@ export async function POST(request: NextRequest) {
       organizationUserId: authResult.membership.id,
       uploadedByUserId: authResult.session.user.id,
       month,
+      invoiceDate,
       totalAmount,
       fileName: file.name,
       mimeType: "application/pdf",
@@ -82,6 +81,7 @@ export async function POST(request: NextRequest) {
       uploaderEmail: authResult.session.user.email,
       membershipId: authResult.membership.id,
       month,
+      invoiceDate,
       totalAmount,
       fileName: invoice.fileName,
       mimeType: "application/pdf",

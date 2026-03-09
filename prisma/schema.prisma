@@ -211,6 +211,7 @@ model Invoice {
   organizationId     String
   organizationUserId String
   invoiceMonth       DateTime
+  invoiceDate        DateTime
   totalAmount        Float
   fileName           String
   mimeType           String
