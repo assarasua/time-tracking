@@ -128,7 +128,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Search
         description={`Daily hours and totals based on selected filter dates (${selectedFrom} to ${selectedTo}).`}
       >
         <div className="space-y-3">
-          <DateRangePresetHeader initialFrom={selectedFrom} initialTo={selectedTo} weekStartsOn={normalizedWeekStart} />
+          <DateRangePresetHeader initialFrom={selectedFrom} initialTo={selectedTo} weekStartsOn={normalizedWeekStart} showNextPreset={false} />
 
           <div className="space-y-2 md:hidden">
             {members.map((member: any) => {

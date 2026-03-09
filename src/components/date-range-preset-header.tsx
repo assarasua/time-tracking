@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/cn";
 
 type DateRangePresetHeaderProps = {
+  showNextPreset?: boolean;
   initialFrom: string;
   initialTo: string;
   weekStartsOn?: 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -32,6 +33,7 @@ const PRESETS: Array<{ mode: Exclude<SelectionMode, "custom">; label: string }> 
 ];
 
 export function DateRangePresetHeader({
+  showNextPreset = true,
   initialFrom,
   initialTo,
   weekStartsOn = 1,
@@ -39,6 +41,7 @@ export function DateRangePresetHeader({
   onApply,
   className
 }: DateRangePresetHeaderProps) {
+  const presets = showNextPreset ? PRESETS : PRESETS.filter((preset) => preset.mode !== "next");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -104,7 +107,7 @@ export function DateRangePresetHeader({
         <div className="pointer-events-none absolute inset-y-0 right-0 w-4 bg-gradient-to-l from-muted/90 to-transparent sm:hidden" />
         <div className="-mx-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:mx-0 sm:px-0" role="group" aria-label="Date range presets">
           <div className="inline-flex min-w-max snap-x snap-mandatory items-center gap-2">
-            {PRESETS.map((preset) => (
+            {presets.map((preset) => (
               <button
                 key={preset.mode}
                 type="button"
