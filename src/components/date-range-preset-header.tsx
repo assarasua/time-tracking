@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { Input } from "@/components/ui/input";
 import {
   detectSelectionMode,
@@ -158,8 +159,8 @@ export function DateRangePresetHeader({
         >
           <label className="min-w-0 space-y-1 text-sm">
             <span className="font-medium text-foreground">From</span>
-            <Input
-              type="date"
+            <DatePickerInput
+              pickerType="date"
               value={from}
               className="min-w-0"
               onChange={(event) => handleManualDateChange("from", event.target.value)}
@@ -167,8 +168,8 @@ export function DateRangePresetHeader({
           </label>
           <label className="min-w-0 space-y-1 text-sm">
             <span className="font-medium text-foreground">To</span>
-            <Input
-              type="date"
+            <DatePickerInput
+              pickerType="date"
               value={to}
               className="min-w-0"
               onChange={(event) => handleManualDateChange("to", event.target.value)}

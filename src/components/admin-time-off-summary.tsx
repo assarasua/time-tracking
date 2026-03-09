@@ -6,7 +6,7 @@ import type { MouseEvent } from "react";
 
 import { AdminModalShell } from "@/components/admin-modal-shell";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { cn } from "@/lib/cn";
 import { formatDateOnly } from "@/lib/date-only";
 
@@ -221,8 +221,8 @@ export function AdminTimeOffSummary({ members }: { members: MemberRow[] }) {
         {mode === "customMonth" ? (
           <label className="block space-y-1 text-sm">
             <span className="font-medium text-foreground">Month</span>
-            <Input
-              type="month"
+            <DatePickerInput
+              pickerType="month"
               value={customMonth}
               className="min-w-0"
               onChange={(event) => applyCustomMonth(event.target.value)}

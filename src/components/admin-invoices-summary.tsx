@@ -6,8 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 
 import { InvoicePreviewModal } from "@/components/invoice-preview-modal";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { cn } from "@/lib/cn";
 import { formatUsd } from "@/lib/currency";
 import { formatDateOnly } from "@/lib/date-only";
@@ -188,7 +188,7 @@ export function AdminInvoicesSummary({ members }: { members: MemberRow[] }) {
         {mode === "custom" ? (
           <label className="block space-y-1 text-sm">
             <span className="font-medium text-foreground">Month</span>
-            <Input type="month" value={month} className="min-w-0" onChange={(event) => applyCustomMonth(event.target.value)} />
+            <DatePickerInput pickerType="month" value={month} className="min-w-0" onChange={(event) => applyCustomMonth(event.target.value)} />
           </label>
         ) : null}
       </div>

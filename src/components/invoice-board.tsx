@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { InvoicePreviewModal } from "@/components/invoice-preview-modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/cn";
 import { formatUsd } from "@/lib/currency";
@@ -235,7 +236,7 @@ export function InvoiceBoard() {
               <div className="mt-4 space-y-3">
                 <label className="block space-y-1 text-sm">
                   <span className="font-medium text-foreground">Invoice date</span>
-                  <Input type="date" value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} />
+                  <DatePickerInput pickerType="date" value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} />
                   <p className="text-xs text-muted-foreground">The invoice month is derived from the selected date: {monthLabel}.</p>
                 </label>
                 <input

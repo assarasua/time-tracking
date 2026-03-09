@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { InvoicePreviewModal } from "@/components/invoice-preview-modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/cn";
 import { formatUsd } from "@/lib/currency";
@@ -237,7 +238,7 @@ export function ExpenseBoard() {
             {mode === "custom" ? (
               <label className="block space-y-1 text-sm">
                 <span className="font-medium text-foreground">Month</span>
-                <Input type="month" value={month} className="min-w-0" onChange={(event) => applyCustomMonth(event.target.value)} />
+                <DatePickerInput pickerType="month" value={month} className="min-w-0" onChange={(event) => applyCustomMonth(event.target.value)} />
               </label>
             ) : null}
           </div>
@@ -264,7 +265,7 @@ export function ExpenseBoard() {
             <div className="space-y-3">
               <label className="block space-y-1 text-sm">
                 <span className="font-medium text-foreground">Expense date</span>
-                <Input type="date" value={expenseDate} onChange={(event) => setExpenseDate(event.target.value)} />
+                <DatePickerInput pickerType="date" value={expenseDate} onChange={(event) => setExpenseDate(event.target.value)} />
               </label>
               <label className="block space-y-1 text-sm">
                 <span className="font-medium text-foreground">Total amount (USD)</span>

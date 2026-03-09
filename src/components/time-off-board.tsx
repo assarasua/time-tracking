@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { GoogleCalendarSyncCard, type CalendarSyncStatus } from "@/components/google-calendar-sync-card";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -451,8 +452,8 @@ export function TimeOffBoard() {
             {mode === "custom" ? (
               <label className="block space-y-1 text-sm">
                 <span className="font-medium text-foreground">Month</span>
-                <Input
-                  type="month"
+                <DatePickerInput
+                  pickerType="month"
                   value={customMonth}
                   className="min-w-0"
                   onChange={(event) => {
