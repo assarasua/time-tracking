@@ -11,3 +11,12 @@ tsconfig.tsbuildinfo
 
 .next.bad.*
 .next.bak.*
+
+# OpenNext
+.open-next
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
