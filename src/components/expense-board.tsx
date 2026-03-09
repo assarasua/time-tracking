@@ -261,35 +261,41 @@ export function ExpenseBoard() {
           </div>
 
           <div className="rounded-xl border border-border bg-background p-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="space-y-1 text-sm">
+            <div className="space-y-3">
+              <label className="block space-y-1 text-sm">
                 <span className="font-medium text-foreground">Expense date</span>
                 <Input type="date" value={expenseDate} onChange={(event) => setExpenseDate(event.target.value)} />
               </label>
-              <label className="space-y-1 text-sm">
+              <label className="block space-y-1 text-sm">
                 <span className="font-medium text-foreground">Total amount (USD)</span>
                 <Input type="number" min="0" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" />
               </label>
-              <label className="space-y-1 text-sm sm:col-span-2">
+              <label className="block space-y-1 text-sm">
                 <span className="font-medium text-foreground">Reference</span>
                 <Input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Flight to client site, taxi, hotel, software receipt..." />
               </label>
-              <label className="space-y-1 text-sm sm:col-span-2">
-                <span className="font-medium text-foreground">Receipt file</span>
-                <Input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
-                  onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
-                />
-                <p className="text-xs text-muted-foreground">Accepted formats: PDF, PNG, JPG, JPEG. Maximum 10 MB.</p>
-              </label>
-            </div>
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-xs text-muted-foreground">
-                {selectedFile ? `${selectedFile.name} · ${formatFileSize(selectedFile.size)}` : "No receipt selected yet."}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+                className="hidden"
+                onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+              />
+              <Button type="button" variant="ghost" className="w-full border border-border bg-background" onClick={() => fileInputRef.current?.click()}>
+                Choose receipt file
+              </Button>
+              <div className="rounded-lg border border-dashed border-border px-3 py-3 text-sm">
+                {selectedFile ? (
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">{selectedFile.name}</p>
+                    <p className="text-xs text-muted-foreground">{formatFileSize(selectedFile.size)}</p>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">No receipt selected yet.</p>
+                )}
               </div>
-              <Button type="button" onClick={() => void handleUpload()} disabled={isBusy || !selectedFile}>
+              <p className="text-xs text-muted-foreground">Accepted formats: PDF, PNG, JPG, JPEG. Maximum 10 MB.</p>
+              <Button type="button" className="w-full" onClick={() => void handleUpload()} disabled={isBusy || !selectedFile}>
                 Add expense
               </Button>
             </div>
