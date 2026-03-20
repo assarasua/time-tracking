@@ -94,7 +94,8 @@ export function GoalsBoard({
 
   const quarterRange = useMemo(() => getRangeForQuarter(quarter), [quarter]);
   const quarterOptions = useMemo(() => listQuarterOptions(), []);
-  const canEdit = role === "admin";
+  const canEditPlanning = true;
+  const canEvaluate = role === "admin";
   const selectedMember = useMemo(
     () => members.find((member) => member.membershipId === selectedMembershipId) ?? members[0],
     [members, selectedMembershipId]
@@ -270,14 +271,14 @@ export function GoalsBoard({
         <CardHeader>
           <CardTitle>Goals</CardTitle>
           <CardDescription>
-            {canEdit
+            {canEvaluate
               ? "Assign 3-5 quarterly goals per employee, track live progress, and record the final evaluation when the goal is completed."
-              : "Review your quarterly goals, current KPI progress, and final evaluations for the selected quarter."}
+              : "Set your own quarterly goals, keep progress updated, and review final evaluations once they are completed."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-3 rounded-xl border border-border bg-muted/40 p-3 sm:p-4">
-            {canEdit ? (
+            {canEvaluate ? (
               <label className="block space-y-1 text-sm">
                 <span className="font-medium text-foreground">Employee</span>
                 <select
@@ -388,11 +389,15 @@ export function GoalsBoard({
         </CardContent>
       </Card>
 
-      {canEdit ? (
+      {canEditPlanning ? (
         <Card>
           <CardHeader>
             <CardTitle>Planning and evaluation</CardTitle>
-            <CardDescription>Update planning fields at the top of each card. Use the evaluation panel to complete or reopen an individual goal.</CardDescription>
+            <CardDescription>
+              {canEvaluate
+                ? "Update planning fields at the top of each card. Use the evaluation panel to complete or reopen an individual goal."
+                : "Update your planning fields at the top of each card. Final evaluation stays visible here once an admin completes the review."}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-3">
@@ -450,7 +455,11 @@ export function GoalsBoard({
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                           <div>
                             <p className="text-sm font-semibold text-foreground">Evaluation</p>
-                            <p className="text-xs text-muted-foreground">Set the final achieved value and close the goal when the review is complete.</p>
+                            <p className="text-xs text-muted-foreground">
+                              {canEvaluate
+                                ? "Set the final achieved value and close the goal when the review is complete."
+                                : "This section becomes read-only once the goal has been reviewed."}
+                            </p>
                           </div>
                           {savedGoal.completedAt ? (
                             <p className="text-xs text-muted-foreground">Reviewed on {format(new Date(savedGoal.completedAt), "MMM d, yyyy")}</p>
@@ -465,6 +474,7 @@ export function GoalsBoard({
                               value={evaluation.actualValue}
                               onChange={(event) => updateEvaluation(savedGoal.id, { actualValue: event.target.value })}
                               placeholder="Enter final achieved result"
+                              disabled={!canEvaluate}
                             />
                           </label>
                           <label className="space-y-1 text-sm md:col-span-2">
@@ -473,31 +483,34 @@ export function GoalsBoard({
                               value={evaluation.evaluationNote}
                               onChange={(event) => updateEvaluation(savedGoal.id, { evaluationNote: event.target.value })}
                               placeholder="Short note on blockers, context, or final outcome"
-                              className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              disabled={!canEvaluate}
+                              className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-70"
                             />
                           </label>
                         </div>
-                        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                          {isCompleted ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              className="border border-border bg-background"
-                              disabled={savingEvaluationId === savedGoal.id}
-                              onClick={() => void saveEvaluation(savedGoal, "in_progress")}
-                            >
-                              {savingEvaluationId === savedGoal.id ? "Saving..." : "Reopen"}
-                            </Button>
-                          ) : (
-                            <Button type="button" disabled={savingEvaluationId === savedGoal.id} onClick={() => void saveEvaluation(savedGoal, "completed")}>
-                              {savingEvaluationId === savedGoal.id ? "Saving..." : "Mark completed"}
-                            </Button>
-                          )}
-                        </div>
+                        {canEvaluate ? (
+                          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                            {isCompleted ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="border border-border bg-background"
+                                disabled={savingEvaluationId === savedGoal.id}
+                                onClick={() => void saveEvaluation(savedGoal, "in_progress")}
+                              >
+                                {savingEvaluationId === savedGoal.id ? "Saving..." : "Reopen"}
+                              </Button>
+                            ) : (
+                              <Button type="button" disabled={savingEvaluationId === savedGoal.id} onClick={() => void saveEvaluation(savedGoal, "completed")}>
+                                {savingEvaluationId === savedGoal.id ? "Saving..." : "Mark completed"}
+                              </Button>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
                     ) : (
                       <div className="mt-4 rounded-xl border border-dashed border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-                        Save the quarterly goals first before using the evaluation section.
+                        Save the quarterly goals first before the review section can be used.
                       </div>
                     )}
                   </div>
